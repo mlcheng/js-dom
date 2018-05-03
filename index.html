@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>asd</title>
+	<script src="vdom.js"></script>
+</head>
+<body>
+	<iq-app></iq-app>
+	<div data-iq-component=""></div>
+</body>
+<script>
+	'use strict';
+	/* global iqwerty */
+	const to = document.querySelector('div');
+	// iqwerty.vdom.Render(`<ul><li>hello</li><li>asd</li></ul><p>asd</p>`, to);
+	// iqwerty.vdom.Render('', to);
+	iqwerty.vdom.Render('<ul><li>hello</li><li>asd</li></ul>', to);
+	// iqwerty.vdom.Render('hello', to);
+	// iqwerty.vdom.Render('<ul><li>hello</li></ul>', to);
+	// setTimeout(() => {
+	// 	// iqwerty.vdom.Update(`<ul><li>hello</li><li>asd</li></ul>`, to);
+	// 	// iqwerty.vdom.Update(`<ul><li>hello</li></ul>`, to);
+	// 	// iqwerty.vdom.Update(`<ul><li>hello</li><li>asd</li><li>jjj</li></ul>`, to);
+	// 	iqwerty.vdom.Update('<ul><li>hello</li><li>asd</li><li>jjj</li></ul><p>asd</p>', to);
+	// 	// iqwerty.vdom.Update('<ul><li>hellos</li></ul>', to);
+	// 	// iqwerty.vdom.Update('hellos', to);
+	// 	// iqwerty.vdom.Update('', to);
+	// }, 1000);
+
+	// setTimeout(() => {
+	// 	iqwerty.vdom.Update('<ul><li>hello</li><li>asd</li></ul>', to);
+	// }, 1500);
+</script>
+</html>
