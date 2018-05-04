@@ -6,15 +6,16 @@
 </head>
 <body>
 	<iq-app></iq-app>
-	<div data-iq-component=""></div>
+	<div data-iq-component="Component"></div>
+	<div data-iq-component="Component"></div>
 </body>
 <script>
 	'use strict';
 	/* global iqwerty */
-	const to = document.querySelector('div');
+	// const to = document.querySelector('div');
 	// iqwerty.vdom.Render(`<ul><li>hello</li><li>asd</li></ul><p>asd</p>`, to);
 	// iqwerty.vdom.Render('', to);
-	iqwerty.vdom.Render('<ul><li>hello</li><li>asd</li></ul>', to);
+	// iqwerty.vdom.Render('<ul><li>hello</li><li>asd</li></ul>', to);
 	// iqwerty.vdom.Render('hello', to);
 	// iqwerty.vdom.Render('<ul><li>hello</li></ul>', to);
 	// setTimeout(() => {
@@ -30,5 +31,18 @@
 	// setTimeout(() => {
 	// 	iqwerty.vdom.Update('<ul><li>hello</li><li>asd</li></ul>', to);
 	// }, 1500);
+	function Component(element) {
+		// console.log(this);
+		// console.log(this.Init(Math.random(), this._el));
+		// this.Init(Math.random(), this._el);
+		setTimeout(() => {
+			console.log('rerender');
+			// element.Render(Math.random());
+			element.Render(`hello ${this.keyword}`);
+		}, 500);
+		element.Init(Math.random());
+		this.keyword = 'michael';
+		// this.Render('<ul><li>hello</li><li>asd</li></ul>');
+	}
 </script>
 </html>

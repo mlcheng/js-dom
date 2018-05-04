@@ -14,13 +14,16 @@
 var iqwerty = iqwerty || {};
 
 const CONTAINER_TAG = 'iq-container';
+const COMPONENT = 'iq-component';
+const COMPONENT_DATASET = 'iqComponent';
+
+const PAGE_LOADED = new Promise(resolve => {
+	document.addEventListener('DOMContentLoaded', () => {
+		resolve();
+	});
+});
 
 iqwerty.vdom = (() => {
-	/**
-	 * The current state of the DOM, as VirtualElements.
-	 */
-	let _currentState;
-
 	/**
 	 * Create a DOM node.
 	 * @param {String} tag The node type.
@@ -141,13 +144,12 @@ iqwerty.vdom = (() => {
 	/**
 	 * Render input HTML by transforming it to VirtualElements.
 	 * @param {String} html Some HTML.
-	 * @param {Node} to The element to render to.
 	 */
-	function Render(html, to) {
-		const root = to;
+	function Init(html) {
+		const root = this._componentRoot;
 
-		_currentState = _parseStringToHtml(html).map(_toVirtualElements);
-		const els = _currentState.map(_toElements);
+		this._currentState = _parseStringToHtml(html).map(_toVirtualElements);
+		const els = this._currentState.map(_toElements);
 		els.forEach(el => {
 			root.appendChild(el);
 		});
@@ -159,13 +161,13 @@ iqwerty.vdom = (() => {
 	}
 
 	/**
-	 * Update the page with the given HTML.
-	 * @param {Node} to The element to render updates to.
+	 * Update and patch the page with the given HTML.
 	 */
-	function Update(html, to) {
-		const root = to;
+	function Render(html) {
+		const root = this._componentRoot;
+
 		const newVdom = _parseStringToHtml(html).map(_toVirtualElements);
-		const oldVdom = _currentState;
+		const oldVdom = this._currentState;
 
 		// Wrap the old and new nodes in a container. This is because we may have multiple siblings in the root, but patching algo only works on 1 root node.
 		const newNode = new VirtualElement(undefined, undefined, ...newVdom);
@@ -181,11 +183,43 @@ iqwerty.vdom = (() => {
 		_patch(newRootNode, newNode, oldNode);
 
 		// Remember to update the current state lol. Otherwise further patches will be against the first render.
-		_currentState = newVdom;
+		this._currentState = newVdom;
 	}
 
+	function Vdom(componentRoot) {
+		/**
+		 * The HTML element of the component root.
+		 * @type {Node}
+		 */
+		this._componentRoot = componentRoot;
+
+		/**
+		 * The controller for the component.
+		 * @type {Function}
+		 */
+		this._controller;
+
+		/**
+		 * The current state of the DOM, as VirtualElements.
+		 * @type {VirtualElement[]}
+		 */
+		this._currentState;
+	}
+
+	Vdom.prototype = {
+		Init,
+		Render
+	};
+
 	return {
-		Render,
-		Update
+		Vdom
 	};
 })();
+
+PAGE_LOADED.then(() => {
+	Array.from(document.querySelectorAll(`[data-${COMPONENT}]`)).forEach(componentElement => {
+		const controller = window[componentElement.dataset[COMPONENT_DATASET]];
+		const vdom = new iqwerty.vdom.Vdom(componentElement);
+		vdom.controller = new controller(vdom);
+	});
+});
