@@ -6,43 +6,45 @@
 </head>
 <body>
 	<iq-app></iq-app>
-	<div data-iq-component="Component"></div>
-	<div data-iq-component="Component"></div>
+	<div data-iq-component="Component">{{this.keyword}} {{location}}</div>
+	<div data-iq-component="Component">hello {{this.keyword}}!<ul>{{this.items.map(item => '<li>' + item + '</li>').join('')}}</ul></div>
+	<div data-iq-component="TimerComponent">{{this.time.minutes}} <span>minutes ({{time.seconds}} seconds) have passed since you opened this page</span></div>
+	<!-- Maybe someday... -->
+	<!-- <div data-iq-component="Component"><ul><li data-iq-for="let item of items">{{item}}</li></ul></div> -->
 </body>
 <script>
 	'use strict';
-	/* global iqwerty */
-	// const to = document.querySelector('div');
-	// iqwerty.vdom.Render(`<ul><li>hello</li><li>asd</li></ul><p>asd</p>`, to);
-	// iqwerty.vdom.Render('', to);
-	// iqwerty.vdom.Render('<ul><li>hello</li><li>asd</li></ul>', to);
-	// iqwerty.vdom.Render('hello', to);
-	// iqwerty.vdom.Render('<ul><li>hello</li></ul>', to);
-	// setTimeout(() => {
-	// 	// iqwerty.vdom.Update(`<ul><li>hello</li><li>asd</li></ul>`, to);
-	// 	// iqwerty.vdom.Update(`<ul><li>hello</li></ul>`, to);
-	// 	// iqwerty.vdom.Update(`<ul><li>hello</li><li>asd</li><li>jjj</li></ul>`, to);
-	// 	iqwerty.vdom.Update('<ul><li>hello</li><li>asd</li><li>jjj</li></ul><p>asd</p>', to);
-	// 	// iqwerty.vdom.Update('<ul><li>hellos</li></ul>', to);
-	// 	// iqwerty.vdom.Update('hellos', to);
-	// 	// iqwerty.vdom.Update('', to);
-	// }, 1000);
-
-	// setTimeout(() => {
-	// 	iqwerty.vdom.Update('<ul><li>hello</li><li>asd</li></ul>', to);
-	// }, 1500);
-	function Component(element) {
-		// console.log(this);
-		// console.log(this.Init(Math.random(), this._el));
-		// this.Init(Math.random(), this._el);
+	/* exported Component, TimerComponent */
+	function Component({ vdom }) {
 		setTimeout(() => {
-			console.log('rerender');
-			// element.Render(Math.random());
-			element.Render(`hello ${this.keyword}`);
-		}, 500);
-		element.Init(Math.random());
+			this.keyword = 'lll';
+		}, 1000);
+
+		setTimeout(() => {
+			this.keyword = 'michael again!';
+
+			// Either these two...
+			this.items.push('d');
+			vdom.ComponentShouldChange();
+
+			// Or this.
+			// this.items = this.items.concat('d');
+		}, 1500);
+
 		this.keyword = 'michael';
-		// this.Render('<ul><li>hello</li><li>asd</li></ul>');
+		this.items = ['a', 'b', 'c'];
+	}
+
+	function TimerComponent() {
+		this.time = {
+			seconds: 0,
+			minutes: 0
+		};
+
+		setInterval(() => {
+			this.time.seconds += 60;
+			this.time.minutes++;
+		}, 60*1000);
 	}
 </script>
 </html>
