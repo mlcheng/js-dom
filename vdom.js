@@ -18,15 +18,11 @@ const COMPONENT = 'iq-component';
 const COMPONENT_DATASET = 'iqComponent';
 const BINDING = '\{\{(.*?)\}\}';
 
-// Linter doesn't like spread syntax ¯\_(ツ)_/¯
-// jshint ignore:start
 // Define a blacklist so that consumers can't use `location` instead of `window.location` or whatever in their template.
 const BLACKLIST = Object.keys(window)
-	.reduce((blacklist, prop) => ({
-		...blacklist,
+	.reduce((blacklist, prop) => Object.assign(blacklist, {
 		[prop]: undefined
 	}), {});
-// jshint ignore:end
 
 const PAGE_LOADED = new Promise(resolve => {
 	document.addEventListener('DOMContentLoaded', () => {
@@ -42,9 +38,6 @@ const PAGE_LOADED = new Promise(resolve => {
  */
 function saferEvalTemplate(template, context) {
 	try {
-		// Linter doesn't like spread syntax ¯\_(ツ)_/¯
-		// jshint ignore:start
-
 		// TODO: Maybe don't do with()?
 		// jshint evil:true
 		return (new Function(`
@@ -53,8 +46,7 @@ function saferEvalTemplate(template, context) {
 			}
 		`))
 		// Note that blacklist should be first, so that context can override it if necessary.
-		.call({ ...BLACKLIST, ...context });
-		// jshint ignore:end
+		.call(Object.assign(BLACKLIST, context));
 	} catch(e) {
 		// Some variable couldn't be found in the executed JS (or something like that).
 		console.error(e, `\n\nCheck to see if all variables on the template exist on your component.\n\nComponent template: ${template}\n\nComponent context:`, context);
@@ -226,7 +218,7 @@ iqwerty.vdom = (() => {
 	/**
 	 * Wraps the component root with iq-container. There may be multiple siblings in the root, so the VirtualElements are later wrapped in a single VirtualElement. The actual root is wrapped in a container too, so that its children match up with the VirtualElements when patching later.
 	 * If the component is already wrapped, does nothing.
-	 * @param  {Node} root The component root.
+	 * @param {Node} root The component root.
 	 */
 	function _wrapComponentIfNeeded(root) {
 		if(root.parentNode.tagName.toLowerCase() === CONTAINER_TAG) {
