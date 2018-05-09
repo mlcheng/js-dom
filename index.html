@@ -9,6 +9,16 @@
 	<div data-iq-component="Component">{{this.keyword}} {{location}}</div>
 	<div data-iq-component="Component">hello {{this.keyword}}!<ul>{{this.items.map(item => '<li>' + item + '</li>').join('')}}</ul></div>
 	<div data-iq-component="TimerComponent">{{this.time.minutes}} <span>minutes ({{time.seconds}} seconds) have passed since you opened this page</span></div>
+
+	<!-- Nested components are next... -->
+	<!-- <div data-iq-component="ParentComponent">
+		hello {{people}}!
+		<div data-iq-component="TimerComponent">
+			{{this.time.seconds}} seconds have passed.
+		</div>
+	</div> -->
+
+
 	<!-- Maybe someday... -->
 	<!-- <div data-iq-component="Component"><ul><li data-iq-for="let item of items">{{item}}</li></ul></div> -->
 </body>
@@ -42,9 +52,16 @@
 		};
 
 		setInterval(() => {
-			this.time.seconds += 60;
 			this.time.minutes++;
 		}, 60*1000);
+
+		setInterval(() => {
+			this.time.seconds++;
+		}, 1000);
+	}
+
+	function ParentComponent() {
+		this.people = 'yall';
 	}
 </script>
 </html>

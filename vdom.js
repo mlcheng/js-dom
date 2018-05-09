@@ -31,6 +31,11 @@ const PAGE_LOADED = new Promise(resolve => {
 });
 
 /**
+ * Noop function used as a default function value when needed.
+ */
+function noop() {}
+
+/**
  * A maybe-safer eval that does not allow global context.
  * @param {String} template Some template string to evaluate.
  * @param {Object} context
@@ -42,7 +47,7 @@ function saferEvalTemplate(template, context) {
 		// jshint evil:true
 		return (new Function(`
 			with(this) {
-				return ${template};
+				return \`${template}\`;
 			}
 		`))
 		// Note that blacklist should be first, so that context can override it if necessary.
@@ -62,7 +67,7 @@ function saferEvalTemplate(template, context) {
  * @param {Object} bindings The object to store object values in.
  * @param {Function} action The callback when changes occur.
  */
-function observe(obj, bindings, action = () => {}) {
+function observe(obj, bindings, action = noop) {
 	Object.keys(obj).forEach(prop => {
 		if(typeof obj[prop] !== 'number' &&
 			typeof obj[prop] !== 'string' &&
@@ -70,9 +75,6 @@ function observe(obj, bindings, action = () => {}) {
 				// We don't want to do anything with functions or things we can't clone/watch properly.
 				return;
 		}
-
-		// Makes a clone of the original thing.
-		// const originalValue = JSON.parse(JSON.stringify(obj[prop]));
 
 		// Set the original value first.
 		bindings[prop] = obj[prop];
@@ -256,7 +258,8 @@ iqwerty.vdom = (() => {
 		sb += html.substring(prevIdx, html.length);
 
 		// Woot, we're done! Eval the string within and return it.
-		return saferEvalTemplate(`\`${sb}\``, context);
+		// return saferEvalTemplate(`\`${sb}\``, context);
+		return saferEvalTemplate(sb, context);
 	}
 
 	/**
@@ -297,7 +300,7 @@ iqwerty.vdom = (() => {
 	 */
 	function ComponentShouldChange(_changeDetectedByFramework = false) { // omg this works?!
 		if(!_changeDetectedByFramework) {
-			console.warn('Component change was not detected automatically by the framework. Please consider helping to fix this bug at https://github.com/mlcheng/js-vdom :)');
+			console.warn('Change detection is caused by using a mutating method, such as pushing instead of concatenating to an array. Use of vdom.ComponentShouldChange() is allowed, but discouraged.');
 		}
 
 		this.Render(this._originalTemplate);
