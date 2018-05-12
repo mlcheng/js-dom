@@ -11,12 +11,16 @@
 	<div data-iq-component="TimerComponent">{{this.time.minutes}} <span>minutes ({{time.seconds}} seconds) have passed since you opened this page</span></div>
 
 	<!-- Nested components are next... -->
-	<!-- <div data-iq-component="ParentComponent">
+	<div data-iq-component="ParentComponent">
 		hello {{people}}!
 		<div data-iq-component="TimerComponent">
 			{{this.time.seconds}} seconds have passed.
 		</div>
-	</div> -->
+		how are you doing?
+		{{this.list.get('haha').a}}
+	</div>
+
+	<!-- <div data-iq-component="lol"></div> -->
 
 
 	<!-- Maybe someday... -->
@@ -24,7 +28,7 @@
 </body>
 <script>
 	'use strict';
-	/* exported Component, TimerComponent */
+	/* exported Component, TimerComponent, ParentComponent */
 	function Component({ vdom }) {
 		setTimeout(() => {
 			this.keyword = 'lll';
@@ -35,7 +39,7 @@
 
 			// Either these two...
 			this.items.push('d');
-			vdom.ComponentShouldChange();
+			// vdom.ComponentShouldChange();
 
 			// Or this.
 			// this.items = this.items.concat('d');
@@ -55,13 +59,22 @@
 			this.time.minutes++;
 		}, 60*1000);
 
-		setInterval(() => {
-			this.time.seconds++;
-		}, 1000);
+		// setInterval(() => {
+		// 	this.time.seconds++;
+		// }, 1000);
 	}
 
-	function ParentComponent() {
+	function ParentComponent({ vdom }) {
 		this.people = 'yall';
+		this.list = new Map();
+		this.list.set('haha', {
+			a: 'hello'
+		});
+
+		setTimeout(() => {
+			this.list.get('haha').a = 'bye';
+			vdom.ComponentShouldChange();
+		}, 1000);
 	}
 </script>
 </html>

@@ -18,17 +18,75 @@ const COMPONENT = 'iq-component';
 const COMPONENT_DATASET = 'iqComponent';
 const BINDING = '\{\{(.*?)\}\}';
 
-// Define a blacklist so that consumers can't use `location` instead of `window.location` or whatever in their template.
+/**
+ * Define a mapping of classes to its mutating methods. This is used for change detection. The framework proxies mutating methods and allows the UI to re-render when a mutating method is used.
+ * This is done because the main solution for change detection here is proxying getters and setters on an object.
+ * @type {Object}
+ */
+const MUTATORS = {
+	'Array': [
+		'copyWithin',
+		'fill',
+		'pop',
+		'push',
+		'reverse',
+		'shift',
+		'sort',
+		'splice',
+		'unshift',
+	],
+	'Map': [
+		'clear',
+		'delete',
+		'set',
+	],
+	'Set': [
+		'add',
+		'clear',
+		'delete',
+	],
+};
+
+/**
+ * Define a blacklist of global properties that consumers shouldn't be able to use in their template. For example, `location` instead of `window.location`.
+ */
 const BLACKLIST = Object.keys(window)
 	.reduce((blacklist, prop) => Object.assign(blacklist, {
 		[prop]: undefined
 	}), {});
 
+/**
+ * A Promise that resolves when the DOM loads.
+ */
 const PAGE_LOADED = new Promise(resolve => {
 	document.addEventListener('DOMContentLoaded', () => {
 		resolve();
 	});
 });
+
+/**
+ * Allow calling mutating methods on objects.
+ * TODO: Determine if this is actually useful/performant.
+ * @param {Object} obj The object whose methods we wish to patch.
+ * @param {Function} action The action to perform when a mutating method is called. Normally, this should be vdom.ComponentShouldChange(true).
+ */
+function __patchAllTheThings(obj, action) {
+	const klass = obj.constructor.name;
+	const mutators = MUTATORS[klass];
+
+	if(!mutators) {
+		return;
+	}
+
+	mutators.forEach(method => {
+		const original = obj[method].bind(obj);
+		obj[method] = (...args) => {
+			const ret = original(...args);
+			action();
+			return ret;
+		};
+	});
+}
 
 /**
  * Noop function used as a default function value when needed.
@@ -51,7 +109,7 @@ function saferEvalTemplate(template, context) {
 			}
 		`))
 		// Note that blacklist should be first, so that context can override it if necessary.
-		.call(Object.assign(BLACKLIST, context));
+		.call(Object.assign({}, BLACKLIST, context));
 	} catch(e) {
 		// Some variable couldn't be found in the executed JS (or something like that).
 		console.error(e, `\n\nCheck to see if all variables on the template exist on your component.\n\nComponent template: ${template}\n\nComponent context:`, context);
@@ -88,6 +146,9 @@ function observe(obj, bindings, action = noop) {
 				action();
 			}
 		});
+
+		// TODO: Determine if this is actually useful/performant.
+		__patchAllTheThings(obj[prop], action);
 
 		if(typeof obj[prop] === 'object') {
 			observe(obj[prop], bindings, action);
@@ -256,9 +317,7 @@ iqwerty.vdom = (() => {
 
 		// Add the final bits of text to the end.
 		sb += html.substring(prevIdx, html.length);
-
 		// Woot, we're done! Eval the string within and return it.
-		// return saferEvalTemplate(`\`${sb}\``, context);
 		return saferEvalTemplate(sb, context);
 	}
 
@@ -300,7 +359,7 @@ iqwerty.vdom = (() => {
 	 */
 	function ComponentShouldChange(_changeDetectedByFramework = false) { // omg this works?!
 		if(!_changeDetectedByFramework) {
-			console.warn('Change detection is caused by using a mutating method, such as pushing instead of concatenating to an array. Use of vdom.ComponentShouldChange() is allowed, but discouraged.');
+			console.warn('Automatic change detection is triggered by reassigning a value - such as concatenating instead of pushing to an array. Some mutating methods are allowed in this framework (see MUTATORS). Use of vdom.ComponentShouldChange() is allowed, but discouraged.');
 		}
 
 		this.Render(this._originalTemplate);
@@ -359,51 +418,56 @@ iqwerty.vdom = (() => {
 // }
 
 PAGE_LOADED.then(() => {
-	Array.from(document.querySelectorAll(`[data-${COMPONENT}]`)).forEach(componentElement => {
-		// Find the controller for the component.
-		const controller = window[componentElement.dataset[COMPONENT_DATASET]];
+	Array.from(document.querySelectorAll(`[data-${COMPONENT}]`))
+		// Reverse the selector so child components can be done first. Lol. This is definitely not the best way to do this but whatevs.
+		.reverse()
+		.forEach(componentElement => {
+			// Find the controller for the component.
+			const controller = window[componentElement.dataset[COMPONENT_DATASET]];
 
-		if(typeof controller !== 'function') {
-			console.error(`The controller for component "${componentElement.dataset[COMPONENT_DATASET]}" does not exist.`);
-			return;
-		}
+			if(typeof controller !== 'function') {
+				console.error(`The controller for component "${componentElement.dataset[COMPONENT_DATASET]}" does not exist.`);
+				return;
+			}
 
-		// Create a new virtual DOM for the component.
-		const vdom = new iqwerty.vdom.Vdom(componentElement);
-
-
-
-		// Patch the async stuff now (before initializing the controller, otherwise things won't get patched in time).
-		// MAYBE?!?!?!?!?!?!?!?!?
-		// patchWith(vdom);
+			// Create a new virtual DOM for the component.
+			const vdom = new iqwerty.vdom.Vdom(componentElement);
 
 
 
-		// Initialize the component controller. Inject the virtual DOM so the consumer can render if needed.
-		// TODO: Initialize controller here or after initial Render()?
-		vdom._controller = new controller({ vdom });
+			// Patch the async stuff now (before initializing the controller, otherwise things won't get patched in time).
+			// MAYBE?!?!?!?!?!?!?!?!?
+			// patchWith(vdom);
 
 
 
-
-		// MAYBE setup watchers here?!???!?!?!
-		const _bindings = {};
-		observe(vdom._controller, _bindings, () => {
-			// Framework detected changes should cause the component to re-render.
-			vdom.ComponentShouldChange(true);
-		});
+			// Initialize the component controller. Inject the virtual DOM so the consumer can render if needed.
+			// TODO: Initialize controller here or after initial Render()?
+			vdom._controller = new controller({ vdom });
 
 
 
 
-		// Call Render() for the consumer once using whatever's in the template already. There should be no need for them to manually call Render() again since data binding will take over.
-		let renderWith = componentElement.innerHTML;
+			// MAYBE setup watchers here?!???!?!?!
+			const _bindings = {};
+			observe(vdom._controller, _bindings, () => {
+				// Framework detected changes should cause the component to re-render.
+				vdom.ComponentShouldChange(true);
+			});
 
-		// Allow arrow functions, less than, and greater than in the template...
-		renderWith = renderWith.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
-		// Reset the content so IQ can handle rendering.
-		componentElement.innerHTML = '';
-		vdom.Render(renderWith);
+
+
+			// Call Render() for the consumer once using whatever's in the template already. There should be no need for them to manually call Render() again since data binding will take over.
+			let renderWith = componentElement.innerHTML;
+
+			// Allow arrow functions, less than, and greater than in the template...
+			renderWith = renderWith.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+			// Reset the content so IQ can handle rendering.
+			// componentElement.innerHTML = '';
+			// WHAT IS THIS USE CASE AGAIN?!?!?!?!? Removed because child components lose their references when parent innerHTML is overwritten.
+
+			vdom.Render(renderWith);
 	});
 });
