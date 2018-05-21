@@ -95,28 +95,37 @@ function noop() {}
 
 /**
  * A maybe-safer eval that does not allow global context.
- * @param {String} template Some template string to evaluate.
+ * @param {String} js Some JS to evaluate.
  * @param {Object} context
- * @return {String} An evaluated template string.
+ * @return {any|undefined} Returns undefined if the JS couldn't be evaulated in context.
  */
-function saferEvalTemplate(template, context) {
+function saferEval(js, context) {
 	try {
 		// TODO: Maybe don't do with()?
 		// jshint evil:true
 		return (new Function(`
 			with(this) {
-				return \`${template}\`;
+				${js}
 			}
 		`))
 		// Note that blacklist should be first, so that context can override it if necessary.
 		.call(Object.assign({}, BLACKLIST, context));
 	} catch(e) {
 		// Some variable couldn't be found in the executed JS (or something like that).
-		console.error(e, `\n\nCheck to see if all variables on the template exist on your component.\n\nComponent template: ${template}\n\nComponent context:`, context);
+		console.error(e, `JavaScript couldn't be executed in the given context.\nJavaScript:\n${js}\nComponent context:`, context);
 
-		// Still return something instead of showing undefined.
-		return '';
+		return undefined;
 	}
+}
+
+/**
+ * A maybe-safer eval for evaluating component templates.
+ * @param {String} template Some template string to evaluate.
+ * @param {Object} context
+ * @return {String} An evaluated template string. If the template cannot be evaluated with the context, an empty string is returned.
+ */
+function saferEvalTemplate(template, context) {
+	return saferEval(`return \`${template}\``, context) || '';
 }
 
 /**

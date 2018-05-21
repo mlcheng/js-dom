@@ -10,10 +10,9 @@
 	<div data-iq-component="Component">hello {{this.keyword}}!<ul>{{this.items.map(item => '<li>' + item + '</li>').join('')}}</ul></div>
 	<div data-iq-component="TimerComponent">{{this.time.minutes}} <span>minutes ({{time.seconds}} seconds) have passed since you opened this page</span></div>
 
-	<!-- Nested components are next... -->
 	<div data-iq-component="ParentComponent">
 		hello {{people}}!
-		<div data-iq-component="TimerComponent">
+		<div data-iq-component="TimerComponent" data-iq:click="">
 			{{this.time.seconds}} seconds have passed.
 		</div>
 		how are you doing?
