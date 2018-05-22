@@ -16,6 +16,7 @@ var iqwerty = iqwerty || {};
 const CONTAINER_TAG = 'iq-container';
 const COMPONENT = 'iq-component';
 const COMPONENT_DATASET = 'iqComponent';
+const IQ_EVENT = 'data-iq:';
 const BINDING = '\{\{(.*?)\}\}';
 
 /**
@@ -63,6 +64,66 @@ const PAGE_LOADED = new Promise(resolve => {
 		resolve();
 	});
 });
+
+/**
+ * Holds references to all components created by the framework. This allows for global state changes.
+ * @type {Set<iqwerty.vdom.Vdom>}
+ */
+const GLOBAL_COMPONENT_REGISTER = new Set();
+
+/**
+ * Global application state to be injected into components if needed. This is a concept and it may be deleted.
+ * @type {Object}
+ */
+const APPLICATION_STATE = (() => {
+	const state = new Map();
+
+	/**
+	 * Returns all entries in the global state.
+	 * @return {Object}
+	 */
+	function all() {
+		return Array
+			.from(state.entries())
+			.reduce((obj, [key, value]) => Object.assign(obj, {
+				[key]: value
+			}), {});
+	}
+
+	/**
+	 * Create an entry in the global state without rendering changes in the UI. This is useful for initializing application state.
+	 */
+	function create(key, value) {
+		state.set(key, value);
+	}
+
+	/**
+	 * Update a value in the global state. Renders changes in all components.
+	 */
+	function update(key, value) {
+		state.set(key, value);
+
+		// console.log('performing global update');
+		// Perform global update.
+		GLOBAL_COMPONENT_REGISTER.forEach(component => {
+			component.ComponentShouldChange(true);
+		});
+	}
+
+	/**
+	 * Get an entry from the global state.
+	 */
+	function get(key) {
+		return state.get(key);
+	}
+
+	return {
+		all,
+		create,
+		update,
+		get,
+	};
+})();
 
 /**
  * Allow calling mutating methods on objects.
@@ -221,20 +282,39 @@ iqwerty.vdom = (() => {
 	}
 
 	/**
-	 * Patch the given root node with the new DOM.
+	 * Returns true if the VirtualElement includes IQ events.
+	 * @param {VirtualElement} vdom
+	 * @return {Boolean}
 	 */
-	function _patch(root, newVdom, oldVdom, childIndex = 0) {
+	function _hasIqEvent(vdom) {
+		if(!vdom.props) {
+			return;
+		}
+
+		return Array
+			.from(vdom.props.keys())
+			.some(prop => prop.indexOf(IQ_EVENT) === 0);
+	}
+
+	/**
+	 * Patch the given root node with the new DOM.
+	 * @param {Object} context The context for parsing and executing IQ events. This should be the component controller.
+	 */
+	function _patch(root, newVdom, oldVdom, context = {}, childIndex = 0) {
 		// console.log(root, newVdom, oldVdom);
 
 		if(!oldVdom) {
 			// console.log('adding child');
-			root.appendChild(_toElements(newVdom));
+			root.appendChild(_toElements(newVdom, context));
 		} else if(!newVdom) {
 			// console.log('removing child');
 			root.removeChild(root.childNodes[childIndex]);
-		} else if(_elementChanged(newVdom, oldVdom)) {
+		} else if(_elementChanged(newVdom, oldVdom) || _hasIqEvent(newVdom)) {
 			// console.log('replacing child');
-			root.replaceChild(_toElements(newVdom), root.childNodes[childIndex]);
+			root.replaceChild(
+				_toElements(newVdom, context),
+				root.childNodes[childIndex]
+			);
 		} else if(newVdom instanceof VirtualElement) {
 			// console.log('diffing children');
 			const newLength = newVdom.children.length;
@@ -244,6 +324,7 @@ iqwerty.vdom = (() => {
 					root.childNodes[childIndex],
 					newVdom.children[i],
 					oldVdom.children[i],
+					context,
 					i
 				);
 			}
@@ -260,9 +341,14 @@ iqwerty.vdom = (() => {
 			return new TextNode(node.textContent);
 		}
 
+		// Transform the node attributes into a Map of attribute to its value.
+		const attrs = new Map(Array.from(node.attributes).map(attr =>
+			[attr.name, attr.value]
+		));
+
 		const el = new VirtualElement(
 			node.nodeName.toLowerCase(),
-			undefined,
+			attrs,
 			...Array.from(node.childNodes).map(_toVirtualElements)
 		);
 
@@ -274,15 +360,34 @@ iqwerty.vdom = (() => {
 	 * @param {VirtualElement}
 	 * @return {Node}
 	 */
-	function _toElements(ve) {
+	function _toElements(ve, context) {
 		if(ve instanceof TextNode) {
 			return document.createTextNode(ve.text);
 		}
 
 		const el = document.createElement(ve.tag);
-		ve.children.map(_toElements).forEach(child => {
-			el.appendChild(child);
-		});
+
+		// Assign event listeners if IQ events are set on the element.
+		if(ve.props) {
+			const iqEvents = Array
+				.from(ve.props.keys())
+				.filter(prop => prop.indexOf(IQ_EVENT) === 0);
+
+			iqEvents.forEach(iqEvent => {
+				const event = iqEvent.split(IQ_EVENT)[1];
+				el.addEventListener(event, () => {
+					const action = ve.props.get(iqEvent);
+					saferEval(action, context);
+				});
+			});
+		}
+
+		// Append its children.
+		ve.children
+			.map(child => _toElements(child, context))
+			.forEach(child => {
+				el.appendChild(child);
+			});
 
 		return el;
 	}
@@ -355,7 +460,7 @@ iqwerty.vdom = (() => {
 		const oldNode = new VirtualElement(undefined, undefined, ...oldVdom);
 
 		// Now we can patch the DOM.
-		_patch(newRootNode, newNode, oldNode);
+		_patch(newRootNode, newNode, oldNode, this._controller);
 
 		// Remember to update the current state lol. Otherwise further patches will be against the first render.
 		this._currentState = newVdom;
@@ -452,7 +557,10 @@ PAGE_LOADED.then(() => {
 
 			// Initialize the component controller. Inject the virtual DOM so the consumer can render if needed.
 			// TODO: Initialize controller here or after initial Render()?
-			vdom._controller = new controller({ vdom });
+			vdom._controller = new controller({
+				view: vdom,
+				appState: APPLICATION_STATE,
+			});
 
 
 
@@ -478,5 +586,8 @@ PAGE_LOADED.then(() => {
 			// WHAT IS THIS USE CASE AGAIN?!?!?!?!? Removed because child components lose their references when parent innerHTML is overwritten.
 
 			vdom.Render(renderWith);
+
+			// Add self to the global register so global state changes can re-render all components.
+			GLOBAL_COMPONENT_REGISTER.add(vdom);
 	});
 });

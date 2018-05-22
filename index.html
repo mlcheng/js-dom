@@ -6,14 +6,16 @@
 </head>
 <body>
 	<iq-app></iq-app>
-	<div data-iq-component="Component">{{this.keyword}} {{location}}</div>
+	<div data-iq-component="Component">{{this.keyword}} {{location}} is cool: {{this.appState.get('cool')}}</div>
 	<div data-iq-component="Component">hello {{this.keyword}}!<ul>{{this.items.map(item => '<li>' + item + '</li>').join('')}}</ul></div>
 	<div data-iq-component="TimerComponent">{{this.time.minutes}} <span>minutes ({{time.seconds}} seconds) have passed since you opened this page</span></div>
 
 	<div data-iq-component="ParentComponent">
-		hello {{people}}!
-		<div data-iq-component="TimerComponent" data-iq:click="">
-			{{this.time.seconds}} seconds have passed.
+		hello {{people}}, {{this.appState.get('cool')}}!
+		<div data-iq-component="TimerComponent">
+			{{this.time.minutes}} minutes have passed.
+
+			<button data-iq:click="this.reset()" data-asd="haha">reset!</button>
 		</div>
 		how are you doing?
 		{{this.list.get('haha').a}}
@@ -28,7 +30,7 @@
 <script>
 	'use strict';
 	/* exported Component, TimerComponent, ParentComponent */
-	function Component({ vdom }) {
+	function Component({ view, appState }) {
 		setTimeout(() => {
 			this.keyword = 'lll';
 		}, 1000);
@@ -38,14 +40,19 @@
 
 			// Either these two...
 			this.items.push('d');
-			// vdom.ComponentShouldChange();
+			// view.ComponentShouldChange();
 
 			// Or this.
 			// this.items = this.items.concat('d');
+
+			appState.update('cool', false);
 		}, 1500);
 
 		this.keyword = 'michael';
 		this.items = ['a', 'b', 'c'];
+
+		this.appState = appState;
+		appState.update('cool', true);
 	}
 
 	function TimerComponent() {
@@ -58,12 +65,17 @@
 			this.time.minutes++;
 		}, 60*1000);
 
+		this.reset = () => {
+			this.time.seconds = 0;
+			this.time.minutes = 0;
+		};
+
 		// setInterval(() => {
 		// 	this.time.seconds++;
 		// }, 1000);
 	}
 
-	function ParentComponent({ vdom }) {
+	function ParentComponent({ view, appState }) {
 		this.people = 'yall';
 		this.list = new Map();
 		this.list.set('haha', {
@@ -72,8 +84,10 @@
 
 		setTimeout(() => {
 			this.list.get('haha').a = 'bye';
-			vdom.ComponentShouldChange();
+			view.ComponentShouldChange();
 		}, 1000);
+
+		this.appState = appState;
 	}
 </script>
 </html>
