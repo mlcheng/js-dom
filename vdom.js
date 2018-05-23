@@ -447,7 +447,6 @@ iqwerty.vdom = (() => {
 		}
 
 		const el = document.createElement(ve.tag);
-		console.log(ve);
 
 		// Append its children.
 		ve.children
