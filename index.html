@@ -5,7 +5,6 @@
 	<script src="vdom.js"></script>
 </head>
 <body>
-	<iq-app></iq-app>
 	<div data-iq-component="Component">{{this.keyword}} {{location}} is cool: {{this.appState.get('cool')}}</div>
 	<div data-iq-component="Component">hello {{this.keyword}}!<ul>{{this.items.map(item => '<li>' + item + '</li>').join('')}}</ul></div>
 	<div data-iq-component="TimerComponent">{{this.time.minutes}} <span>minutes ({{time.seconds}} seconds) have passed since you opened this page</span></div>
@@ -13,7 +12,7 @@
 	<div data-iq-component="ParentComponent">
 		hello {{people}}, {{this.appState.get('cool')}}!
 		<div data-iq-component="TimerComponent">
-			{{this.time.minutes}} minutes have passed.
+			{{this.time.seconds}} seconds have passed.
 
 			<button data-iq:click="this.reset()" data-asd="haha">reset!</button>
 		</div>
@@ -21,7 +20,10 @@
 		{{this.list.get('haha').a}}
 	</div>
 
-	<!-- <div data-iq-component="lol"></div> -->
+	<div data-iq-component="TwoWayBindingComponent">
+		<input type="text" data-iq:input="this.updateState($iqEvent)">
+		<span>the text is {{this.text}}</span>
+	</div>
 
 
 	<!-- Maybe someday... -->
@@ -29,7 +31,7 @@
 </body>
 <script>
 	'use strict';
-	/* exported Component, TimerComponent, ParentComponent */
+	/* exported Component, TimerComponent, ParentComponent, TwoWayBindingComponent */
 	function Component({ view, appState }) {
 		setTimeout(() => {
 			this.keyword = 'lll';
@@ -65,14 +67,14 @@
 			this.time.minutes++;
 		}, 60*1000);
 
+		setInterval(() => {
+			this.time.seconds++;
+		}, 1000);
+
 		this.reset = () => {
 			this.time.seconds = 0;
 			this.time.minutes = 0;
 		};
-
-		// setInterval(() => {
-		// 	this.time.seconds++;
-		// }, 1000);
 	}
 
 	function ParentComponent({ view, appState }) {
@@ -88,6 +90,16 @@
 		}, 1000);
 
 		this.appState = appState;
+	}
+
+	function TwoWayBindingComponent({host}) {
+		this.updateState = (e) => {
+			this.text = e.target.value;
+		};
+
+		this.text = 'hello';
+
+		host.querySelector('input').value = this.text;
 	}
 </script>
 </html>

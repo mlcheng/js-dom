@@ -14,9 +14,20 @@
 var iqwerty = iqwerty || {};
 
 const CONTAINER_TAG = 'iq-container';
+
 const COMPONENT = 'iq-component';
 const COMPONENT_DATASET = 'iqComponent';
+
 const IQ_EVENT = 'data-iq:';
+const IQ_EVENT_INJECTION = '$iqEvent';
+
+/**
+ * Used as a property name on a Node to keep track of IQ listeners that are set on the Node.
+ * TODO: Figure out if this is a good thing to do.....
+ * @type {Symbol}
+ */
+const LISTENERS_SYMBOL = Symbol('listeners');
+
 const BINDING = '\{\{(.*?)\}\}';
 
 /**
@@ -259,7 +270,16 @@ iqwerty.vdom = (() => {
 	function _parseStringToHtml(html) {
 		const content = new DOMParser().parseFromString(html, 'text/html').body;
 		const componentRoot = document.createDocumentFragment();
-		Array.from(content.childNodes).forEach(child => {
+		const children = Array.from(content.childNodes);
+
+		if(children.length && children[0] && children[0].nodeType !== Node.TEXT_NODE) {
+			// TODO: Figure out if this really solves the problem.
+			// Add an empty text node to the beginning. The problem is that the DOMParser doesn't add the text nodes in the beginning of the string. So if there is a new line before the first element, it doesn't add it to the structure.
+			// We add an empty text node here so the VDOM can have the same representation as the real one.
+			children.unshift(document.createTextNode(undefined));
+		}
+
+		children.forEach(child => {
 			componentRoot.appendChild(child);
 		});
 
@@ -282,18 +302,75 @@ iqwerty.vdom = (() => {
 	}
 
 	/**
+	 * Returns true if the VirtualElement is a component.
+	 * @param {VirtualElement} vdom
+	 * @return {Boolean}
+	 */
+	function _isIqComponent(vdom) {
+		if(!vdom.props) {
+			return false;
+		}
+
+		return Array
+			.from(vdom.props.keys())
+			.some(prop => prop.indexOf(`data-${COMPONENT}`) === 0);
+	}
+
+	/**
 	 * Returns true if the VirtualElement includes IQ events.
 	 * @param {VirtualElement} vdom
 	 * @return {Boolean}
 	 */
 	function _hasIqEvent(vdom) {
 		if(!vdom.props) {
-			return;
+			return false;
 		}
 
 		return Array
 			.from(vdom.props.keys())
 			.some(prop => prop.indexOf(IQ_EVENT) === 0);
+	}
+
+	/**
+	 * Handle events on a VirtualElement. If there are events, it tracks them and sets actual event listeners.
+	 * @param {Node} el The actual HTML element associated with the VirtualElement. Event listeners will be set on this element.
+	 * @param {VirtualElement} ve
+	 * @param {Object} context The context to execute the event handler in. This is normally the component controller.
+	 */
+	function _handleEvents(el, ve, context) {
+		if(!_hasIqEvent(ve)) {
+			return;
+		}
+
+		// Track listeners set on the element by adding a secret property on it.
+		if(el[LISTENERS_SYMBOL] === undefined) {
+			el[LISTENERS_SYMBOL] = new Set();
+		}
+
+		// Assign event listeners if IQ events are set on the element.
+		if(ve.props) {
+			const iqEvents = Array
+				.from(ve.props.keys())
+				.filter(prop => prop.indexOf(IQ_EVENT) === 0);
+
+			iqEvents.forEach(iqEvent => {
+				const event = iqEvent.split(IQ_EVENT)[1];
+
+				const fn = (e) => {
+					const action = ve.props.get(iqEvent);
+
+					// Inject the event as `$event`. This can then be used in the event handler.
+					context[IQ_EVENT_INJECTION] = e;
+
+					saferEval(action, context);
+				};
+
+				if(!el[LISTENERS_SYMBOL].has(event)) {
+					el[LISTENERS_SYMBOL].add(event);
+					el.addEventListener(event, fn);
+				}
+			});
+		}
 	}
 
 	/**
@@ -303,19 +380,23 @@ iqwerty.vdom = (() => {
 	function _patch(root, newVdom, oldVdom, context = {}, childIndex = 0) {
 		// console.log(root, newVdom, oldVdom);
 
+		// Parse the vdom to see if any events are there
+		_handleEvents(root, newVdom, context);
+
 		if(!oldVdom) {
 			// console.log('adding child');
 			root.appendChild(_toElements(newVdom, context));
 		} else if(!newVdom) {
 			// console.log('removing child');
 			root.removeChild(root.childNodes[childIndex]);
-		} else if(_elementChanged(newVdom, oldVdom) || _hasIqEvent(newVdom)) {
+		} else if(_elementChanged(newVdom, oldVdom)) {
 			// console.log('replacing child');
 			root.replaceChild(
 				_toElements(newVdom, context),
 				root.childNodes[childIndex]
 			);
-		} else if(newVdom instanceof VirtualElement) {
+		// Don't process nested components.
+		} else if(newVdom instanceof VirtualElement && !_isIqComponent(newVdom)) {
 			// console.log('diffing children');
 			const newLength = newVdom.children.length;
 			const oldLength = oldVdom.children.length;
@@ -366,21 +447,7 @@ iqwerty.vdom = (() => {
 		}
 
 		const el = document.createElement(ve.tag);
-
-		// Assign event listeners if IQ events are set on the element.
-		if(ve.props) {
-			const iqEvents = Array
-				.from(ve.props.keys())
-				.filter(prop => prop.indexOf(IQ_EVENT) === 0);
-
-			iqEvents.forEach(iqEvent => {
-				const event = iqEvent.split(IQ_EVENT)[1];
-				el.addEventListener(event, () => {
-					const action = ve.props.get(iqEvent);
-					saferEval(action, context);
-				});
-			});
-		}
+		console.log(ve);
 
 		// Append its children.
 		ve.children
@@ -555,11 +622,17 @@ PAGE_LOADED.then(() => {
 
 
 
-			// Initialize the component controller. Inject the virtual DOM so the consumer can render if needed.
 			// TODO: Initialize controller here or after initial Render()?
+			/**
+			 * The component controller. Can inject the following dependencies.
+			 * @param {Object} appState The global application state. See APPLICATION_STATE.
+			 * @param {Node} host The host element of the component. This is the component that defines [data-iq-component].
+			 * @param {iqwerty.vdom.Vdom} view The virtual DOM associated with the component. This is useful for manually re-rendering the view when the framework fails to detect changes.
+			 */
 			vdom._controller = new controller({
-				view: vdom,
 				appState: APPLICATION_STATE,
+				host: componentElement,
+				view: vdom,
 			});
 
 
