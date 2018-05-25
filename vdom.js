@@ -20,6 +20,14 @@ const PAGE_LOADED = new Promise(resolve => {
 	document.addEventListener('DOMContentLoaded', () => {
 		resolve();
 	});
+
+	if(document.readyState === 'interactive') {
+		resolve();
+	}
+});
+
+PAGE_LOADED.then(() => {
+	iqwerty.vdom.Load(document);
 });
 
 iqwerty.vdom = (() => {
@@ -37,6 +45,12 @@ iqwerty.vdom = (() => {
 	 * @type {Symbol}
 	 */
 	const LISTENERS_SYMBOL = Symbol('listeners');
+
+	/**
+	 * Used to specify that an IQ component Node has been resolved already and should not be touched anymore by external iqwerty.vdom.Load() calls.
+	 * @type {Symbol}
+	 */
+	const COMPONENT_RESOLVED_SYMBOL = Symbol('componentResolved');
 
 	const BINDING = '\{\{(.*?)\}\}';
 
@@ -79,7 +93,7 @@ iqwerty.vdom = (() => {
 
 	/**
 	 * Holds references to all components created by the framework. This allows for global state changes.
-	 * @type {Set<iqwerty.vdom.Vdom>}
+	 * @type {Set<Vdom>}
 	 */
 	const GLOBAL_COMPONENT_REGISTER = new Set();
 
@@ -580,75 +594,101 @@ iqwerty.vdom = (() => {
 		ComponentShouldChange
 	};
 
-	PAGE_LOADED.then(() => {
-		Array.from(document.querySelectorAll(`[data-${COMPONENT}]`))
+	/**
+	 * Resolves a component by initializing and creating a virtual DOM for it.
+	 * @param {Node} componentElement
+	 */
+	function _resolveComponent(componentElement) {
+		// Find the controller for the component.
+		const controller = window[componentElement.dataset[COMPONENT_DATASET]];
+
+		if(typeof controller !== 'function') {
+			console.error(`The controller for component "${componentElement.dataset[COMPONENT_DATASET]}" does not exist.`);
+			return;
+		}
+
+		// Create a new virtual DOM for the component.
+		const vdom = new Vdom(componentElement);
+
+
+
+		// Patch the async stuff now (before initializing the controller, otherwise things won't get patched in time).
+		// MAYBE?!?!?!?!?!?!?!?!?
+		// patchWith(vdom);
+
+
+
+		// TODO: Initialize controller here or after initial Render()?
+		/**
+		 * The component controller. Can inject the following dependencies.
+		 * @param {Object} appState The global application state. See APPLICATION_STATE.
+		 * @param {Node} host The host element of the component. This is the component that defines [data-iq-component].
+		 * @param {Vdom} view The virtual DOM associated with the component. This is useful for manually re-rendering the view when the framework fails to detect changes.
+		 */
+		vdom._controller = new controller({
+			appState: APPLICATION_STATE,
+			host: componentElement,
+			view: vdom,
+		});
+
+
+
+
+		// MAYBE setup watchers here?!???!?!?!
+		const _bindings = {};
+		_observe(vdom._controller, _bindings, () => {
+			// Framework detected changes should cause the component to re-render.
+			vdom.ComponentShouldChange(true);
+		});
+
+
+
+
+		// Call Render() for the consumer once using whatever's in the template already. There should be no need for them to manually call Render() again since data binding will take over.
+		let renderWith = componentElement.innerHTML;
+
+		// Allow arrow functions, less than, and greater than in the template...
+		renderWith = renderWith.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+		// Reset the content so IQ can handle rendering.
+		// componentElement.innerHTML = '';
+		// WHAT IS THIS USE CASE AGAIN?!?!?!?!? Removed because child components lose their references when parent innerHTML is overwritten.
+
+		vdom.Render(renderWith);
+
+		// Add self to the global register so global state changes can re-render all components.
+		GLOBAL_COMPONENT_REGISTER.add(vdom);
+
+		// Mark the component as resolved.
+		componentElement[COMPONENT_RESOLVED_SYMBOL] = true;
+	}
+
+	/**
+	 * Load an IQ component (and any child components it may have).
+	 * @param {Node} element The host element to load.
+	 */
+	function Load(element) {
+		// Queue up child components to resolve.
+		const components = Array
+			.from(element.querySelectorAll(`[data-${COMPONENT}]`));
+
+		// Queue the current target if it is an IQ component.
+		if(element.dataset && element.dataset[COMPONENT_DATASET]) {
+			components.unshift(element);
+		}
+
+		components
+			// Only handle unresolved components.
+			.filter(el => !el[COMPONENT_RESOLVED_SYMBOL])
 			// Reverse the selector so child components can be done first. Lol. This is definitely not the best way to do this but whatevs.
 			.reverse()
-			.forEach(componentElement => {
-				// Find the controller for the component.
-				const controller = window[componentElement.dataset[COMPONENT_DATASET]];
-
-				if(typeof controller !== 'function') {
-					console.error(`The controller for component "${componentElement.dataset[COMPONENT_DATASET]}" does not exist.`);
-					return;
-				}
-
-				// Create a new virtual DOM for the component.
-				const vdom = new iqwerty.vdom.Vdom(componentElement);
-
-
-
-				// Patch the async stuff now (before initializing the controller, otherwise things won't get patched in time).
-				// MAYBE?!?!?!?!?!?!?!?!?
-				// patchWith(vdom);
-
-
-
-				// TODO: Initialize controller here or after initial Render()?
-				/**
-				 * The component controller. Can inject the following dependencies.
-				 * @param {Object} appState The global application state. See APPLICATION_STATE.
-				 * @param {Node} host The host element of the component. This is the component that defines [data-iq-component].
-				 * @param {iqwerty.vdom.Vdom} view The virtual DOM associated with the component. This is useful for manually re-rendering the view when the framework fails to detect changes.
-				 */
-				vdom._controller = new controller({
-					appState: APPLICATION_STATE,
-					host: componentElement,
-					view: vdom,
-				});
-
-
-
-
-				// MAYBE setup watchers here?!???!?!?!
-				const _bindings = {};
-				_observe(vdom._controller, _bindings, () => {
-					// Framework detected changes should cause the component to re-render.
-					vdom.ComponentShouldChange(true);
-				});
-
-
-
-
-				// Call Render() for the consumer once using whatever's in the template already. There should be no need for them to manually call Render() again since data binding will take over.
-				let renderWith = componentElement.innerHTML;
-
-				// Allow arrow functions, less than, and greater than in the template...
-				renderWith = renderWith.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-
-				// Reset the content so IQ can handle rendering.
-				// componentElement.innerHTML = '';
-				// WHAT IS THIS USE CASE AGAIN?!?!?!?!? Removed because child components lose their references when parent innerHTML is overwritten.
-
-				vdom.Render(renderWith);
-
-				// Add self to the global register so global state changes can re-render all components.
-				GLOBAL_COMPONENT_REGISTER.add(vdom);
-		});
-	});
+			.forEach(el => {
+				_resolveComponent(el);
+			});
+	}
 
 	return {
-		Vdom
+		Load
 	};
 })();
 
