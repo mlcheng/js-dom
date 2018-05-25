@@ -12,7 +12,7 @@
 	<div data-iq-component="ParentComponent">
 		hello {{people}}, {{this.appState.get('cool')}}!
 		<div data-iq-component="TimerComponent">
-			{{this.time.seconds}} seconds have passed.
+			{{this.time.seconds}} second{{this.time.seconds === 1 ? '' : 's'}} have passed.
 
 			<button data-iq:click="this.reset()" data-asd="haha">reset!</button>
 		</div>

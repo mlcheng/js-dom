@@ -13,60 +13,6 @@
 
 var iqwerty = iqwerty || {};
 
-const CONTAINER_TAG = 'iq-container';
-
-const COMPONENT = 'iq-component';
-const COMPONENT_DATASET = 'iqComponent';
-
-const IQ_EVENT = 'data-iq:';
-const IQ_EVENT_INJECTION = '$iqEvent';
-
-/**
- * Used as a property name on a Node to keep track of IQ listeners that are set on the Node.
- * TODO: Figure out if this is a good thing to do.....
- * @type {Symbol}
- */
-const LISTENERS_SYMBOL = Symbol('listeners');
-
-const BINDING = '\{\{(.*?)\}\}';
-
-/**
- * Define a mapping of classes to its mutating methods. This is used for change detection. The framework proxies mutating methods and allows the UI to re-render when a mutating method is used.
- * This is done because the main solution for change detection here is proxying getters and setters on an object.
- * @type {Object}
- */
-const MUTATORS = {
-	'Array': [
-		'copyWithin',
-		'fill',
-		'pop',
-		'push',
-		'reverse',
-		'shift',
-		'sort',
-		'splice',
-		'unshift',
-	],
-	'Map': [
-		'clear',
-		'delete',
-		'set',
-	],
-	'Set': [
-		'add',
-		'clear',
-		'delete',
-	],
-};
-
-/**
- * Define a blacklist of global properties that consumers shouldn't be able to use in their template. For example, `location` instead of `window.location`.
- */
-const BLACKLIST = Object.keys(window)
-	.reduce((blacklist, prop) => Object.assign(blacklist, {
-		[prop]: undefined
-	}), {});
-
 /**
  * A Promise that resolves when the DOM loads.
  */
@@ -76,168 +22,226 @@ const PAGE_LOADED = new Promise(resolve => {
 	});
 });
 
-/**
- * Holds references to all components created by the framework. This allows for global state changes.
- * @type {Set<iqwerty.vdom.Vdom>}
- */
-const GLOBAL_COMPONENT_REGISTER = new Set();
-
-/**
- * Global application state to be injected into components if needed. This is a concept and it may be deleted.
- * @type {Object}
- */
-const APPLICATION_STATE = (() => {
-	const state = new Map();
-
-	/**
-	 * Returns all entries in the global state.
-	 * @return {Object}
-	 */
-	function all() {
-		return Array
-			.from(state.entries())
-			.reduce((obj, [key, value]) => Object.assign(obj, {
-				[key]: value
-			}), {});
-	}
-
-	/**
-	 * Create an entry in the global state without rendering changes in the UI. This is useful for initializing application state.
-	 */
-	function create(key, value) {
-		state.set(key, value);
-	}
-
-	/**
-	 * Update a value in the global state. Renders changes in all components.
-	 */
-	function update(key, value) {
-		state.set(key, value);
-
-		// console.log('performing global update');
-		// Perform global update.
-		GLOBAL_COMPONENT_REGISTER.forEach(component => {
-			component.ComponentShouldChange(true);
-		});
-	}
-
-	/**
-	 * Get an entry from the global state.
-	 */
-	function get(key) {
-		return state.get(key);
-	}
-
-	return {
-		all,
-		create,
-		update,
-		get,
-	};
-})();
-
-/**
- * Allow calling mutating methods on objects.
- * TODO: Determine if this is actually useful/performant.
- * @param {Object} obj The object whose methods we wish to patch.
- * @param {Function} action The action to perform when a mutating method is called. Normally, this should be vdom.ComponentShouldChange(true).
- */
-function __patchAllTheThings(obj, action) {
-	const klass = obj.constructor.name;
-	const mutators = MUTATORS[klass];
-
-	if(!mutators) {
-		return;
-	}
-
-	mutators.forEach(method => {
-		const original = obj[method].bind(obj);
-		obj[method] = (...args) => {
-			const ret = original(...args);
-			action();
-			return ret;
-		};
-	});
-}
-
-/**
- * Noop function used as a default function value when needed.
- */
-function noop() {}
-
-/**
- * A maybe-safer eval that does not allow global context.
- * @param {String} js Some JS to evaluate.
- * @param {Object} context
- * @return {any|undefined} Returns undefined if the JS couldn't be evaulated in context.
- */
-function saferEval(js, context) {
-	try {
-		// TODO: Maybe don't do with()?
-		// jshint evil:true
-		return (new Function(`
-			with(this) {
-				${js}
-			}
-		`))
-		// Note that blacklist should be first, so that context can override it if necessary.
-		.call(Object.assign({}, BLACKLIST, context));
-	} catch(e) {
-		// Some variable couldn't be found in the executed JS (or something like that).
-		console.error(e, `JavaScript couldn't be executed in the given context.\nJavaScript:\n${js}\nComponent context:`, context);
-
-		return undefined;
-	}
-}
-
-/**
- * A maybe-safer eval for evaluating component templates.
- * @param {String} template Some template string to evaluate.
- * @param {Object} context
- * @return {String} An evaluated template string. If the template cannot be evaluated with the context, an empty string is returned.
- */
-function saferEvalTemplate(template, context) {
-	return saferEval(`return \`${template}\``, context) || '';
-}
-
-/**
- * Observe an object and use the given bindings as storage. If an action is specified, it is called when the object has changes.
- * @param {Object} obj The object to observe.
- * @param {Object} bindings The object to store object values in.
- * @param {Function} action The callback when changes occur.
- */
-function observe(obj, bindings, action = noop) {
-	Object.keys(obj).forEach(prop => {
-		if(typeof obj[prop] !== 'number' &&
-			typeof obj[prop] !== 'string' &&
-			typeof obj[prop] !== 'object') {
-				// We don't want to do anything with functions or things we can't clone/watch properly.
-				return;
-		}
-
-		// Set the original value first.
-		bindings[prop] = obj[prop];
-		Object.defineProperty(obj, prop, {
-			get() {
-				return bindings[prop];
-			},
-			set(value) {
-				bindings[prop] = value;
-				// console.log('re-render now!');
-				action();
-			}
-		});
-
-		// TODO: Determine if this is actually useful/performant.
-		__patchAllTheThings(obj[prop], action);
-
-		if(typeof obj[prop] === 'object') {
-			observe(obj[prop], bindings, action);
-		}
-	});
-}
-
 iqwerty.vdom = (() => {
+	const CONTAINER_TAG = 'iq-container';
+
+	const COMPONENT = 'iq-component';
+	const COMPONENT_DATASET = 'iqComponent';
+
+	const IQ_EVENT = 'data-iq:';
+	const IQ_EVENT_INJECTION = '$iqEvent';
+
+	/**
+	 * Used as a property name on a Node to keep track of IQ listeners that are set on the Node.
+	 * TODO: Figure out if this is a good thing to do.....
+	 * @type {Symbol}
+	 */
+	const LISTENERS_SYMBOL = Symbol('listeners');
+
+	const BINDING = '\{\{(.*?)\}\}';
+
+	/**
+	 * Define a mapping of classes to its mutating methods. This is used for change detection. The framework proxies mutating methods and allows the UI to re-render when a mutating method is used.
+	 * This is done because the main solution for change detection here is proxying getters and setters on an object.
+	 * @type {Object}
+	 */
+	const MUTATORS = {
+		'Array': [
+			'copyWithin',
+			'fill',
+			'pop',
+			'push',
+			'reverse',
+			'shift',
+			'sort',
+			'splice',
+			'unshift',
+		],
+		'Map': [
+			'clear',
+			'delete',
+			'set',
+		],
+		'Set': [
+			'add',
+			'clear',
+			'delete',
+		],
+	};
+
+	/**
+	 * Define a blacklist of global properties that consumers shouldn't be able to use in their template. For example, `location` instead of `window.location`.
+	 */
+	const BLACKLIST = Object.getOwnPropertyNames(window)
+		.reduce((blacklist, prop) => Object.assign(blacklist, {
+			[prop]: undefined
+		}), {});
+
+	/**
+	 * Holds references to all components created by the framework. This allows for global state changes.
+	 * @type {Set<iqwerty.vdom.Vdom>}
+	 */
+	const GLOBAL_COMPONENT_REGISTER = new Set();
+
+	/**
+	 * Global application state to be injected into components if needed. This is a concept and it may be deleted.
+	 * @type {Object}
+	 */
+	const APPLICATION_STATE = (() => {
+		const state = new Map();
+
+		/**
+		 * Returns all entries in the global state.
+		 * @return {Object}
+		 */
+		function all() {
+			return Array
+				.from(state.entries())
+				.reduce((obj, [key, value]) => Object.assign(obj, {
+					[key]: value
+				}), {});
+		}
+
+		/**
+		 * Create an entry in the global state without rendering changes in the UI. This is useful for initializing application state.
+		 */
+		function create(key, value) {
+			state.set(key, value);
+		}
+
+		/**
+		 * Update a value in the global state. Renders changes in all components.
+		 */
+		function update(key, value) {
+			state.set(key, value);
+
+			// console.log('performing global update');
+			// Perform global update.
+			GLOBAL_COMPONENT_REGISTER.forEach(component => {
+				component.ComponentShouldChange(true);
+			});
+		}
+
+		/**
+		 * Get an entry from the global state.
+		 */
+		function get(key) {
+			return state.get(key);
+		}
+
+		return {
+			all,
+			create,
+			update,
+			get,
+		};
+	})();
+
+	/**
+	 * Allow calling mutating methods on objects.
+	 * TODO: Determine if this is actually useful/performant.
+	 * @param {Object} obj The object whose methods we wish to patch.
+	 * @param {Function} action The action to perform when a mutating method is called. Normally, this should be vdom.ComponentShouldChange(true).
+	 */
+	function __patchAllTheThings(obj, action) {
+		const klass = obj.constructor.name;
+		const mutators = MUTATORS[klass];
+
+		if(!mutators) {
+			return;
+		}
+
+		mutators.forEach(method => {
+			const original = obj[method].bind(obj);
+			obj[method] = (...args) => {
+				const ret = original(...args);
+				action();
+				return ret;
+			};
+		});
+	}
+
+	/**
+	 * Noop function used as a default function value when needed.
+	 */
+	function _noop() {}
+
+	/**
+	 * A maybe-safer eval that does not allow global context.
+	 * @param {String} js Some JS to evaluate.
+	 * @param {Object} context
+	 * @return {any|undefined} Returns undefined if the JS couldn't be evaulated in context.
+	 */
+	function _saferEval(js, context) {
+		try {
+			// TODO: Maybe don't do with()?
+			// jshint evil:true
+			return (new Function(`
+				with(this) {
+					${js}
+				}
+			`))
+			// Note that blacklist should be first, so that context can override it if necessary.
+			.call(Object.assign({}, BLACKLIST, context));
+		} catch(e) {
+			// Some variable couldn't be found in the executed JS (or something like that).
+			console.error(e, `JavaScript couldn't be executed in the given context.\nJavaScript:\n${js}\nComponent context:`, context);
+
+			return undefined;
+		}
+	}
+
+	/**
+	 * A maybe-safer eval for evaluating component templates.
+	 * @param {String} template Some template string to evaluate.
+	 * @param {Object} context
+	 * @return {String} An evaluated template string. If the template cannot be evaluated with the context, an empty string is returned.
+	 */
+	function _saferEvalTemplate(template, context) {
+		return _saferEval(`return \`${template}\``, context) || '';
+	}
+
+	/**
+	 * Observe an object and use the given bindings as storage. If an action is specified, it is called when the object has changes.
+	 * @param {Object} obj The object to observe.
+	 * @param {Object} bindings The object to store object values in.
+	 * @param {Function} action The callback when changes occur.
+	 */
+	function _observe(obj, bindings, action = _noop) {
+		Object.keys(obj).forEach(prop => {
+			if(typeof obj[prop] !== 'number' &&
+				typeof obj[prop] !== 'string' &&
+				typeof obj[prop] !== 'object') {
+					// We don't want to do anything with functions or things we can't clone/watch properly.
+					return;
+			}
+
+			// Set the original value first.
+			bindings[prop] = obj[prop];
+			Object.defineProperty(obj, prop, {
+				get() {
+					return bindings[prop];
+				},
+				set(value) {
+					bindings[prop] = value;
+					// console.log('re-render now!');
+					action();
+				}
+			});
+
+			// TODO: Determine if this is actually useful/performant.
+			__patchAllTheThings(obj[prop], action);
+
+			if(typeof obj[prop] === 'object') {
+				_observe(obj[prop], bindings, action);
+			}
+		});
+	}
+
+
+	// === Begin framework code === //
+
+
 	/**
 	 * Create a DOM node.
 	 * @param {String} tag The node type.
@@ -359,10 +363,10 @@ iqwerty.vdom = (() => {
 				const fn = (e) => {
 					const action = ve.props.get(iqEvent);
 
-					// Inject the event as `$event`. This can then be used in the event handler.
+					// Inject the event as `$iqEvent`. This can then be used in the event handler.
 					context[IQ_EVENT_INJECTION] = e;
 
-					saferEval(action, context);
+					_saferEval(action, context);
 				};
 
 				if(!el[LISTENERS_SYMBOL].has(event)) {
@@ -498,7 +502,7 @@ iqwerty.vdom = (() => {
 		// Add the final bits of text to the end.
 		sb += html.substring(prevIdx, html.length);
 		// Woot, we're done! Eval the string within and return it.
-		return saferEvalTemplate(sb, context);
+		return _saferEvalTemplate(sb, context);
 	}
 
 	/**
@@ -576,6 +580,73 @@ iqwerty.vdom = (() => {
 		ComponentShouldChange
 	};
 
+	PAGE_LOADED.then(() => {
+		Array.from(document.querySelectorAll(`[data-${COMPONENT}]`))
+			// Reverse the selector so child components can be done first. Lol. This is definitely not the best way to do this but whatevs.
+			.reverse()
+			.forEach(componentElement => {
+				// Find the controller for the component.
+				const controller = window[componentElement.dataset[COMPONENT_DATASET]];
+
+				if(typeof controller !== 'function') {
+					console.error(`The controller for component "${componentElement.dataset[COMPONENT_DATASET]}" does not exist.`);
+					return;
+				}
+
+				// Create a new virtual DOM for the component.
+				const vdom = new iqwerty.vdom.Vdom(componentElement);
+
+
+
+				// Patch the async stuff now (before initializing the controller, otherwise things won't get patched in time).
+				// MAYBE?!?!?!?!?!?!?!?!?
+				// patchWith(vdom);
+
+
+
+				// TODO: Initialize controller here or after initial Render()?
+				/**
+				 * The component controller. Can inject the following dependencies.
+				 * @param {Object} appState The global application state. See APPLICATION_STATE.
+				 * @param {Node} host The host element of the component. This is the component that defines [data-iq-component].
+				 * @param {iqwerty.vdom.Vdom} view The virtual DOM associated with the component. This is useful for manually re-rendering the view when the framework fails to detect changes.
+				 */
+				vdom._controller = new controller({
+					appState: APPLICATION_STATE,
+					host: componentElement,
+					view: vdom,
+				});
+
+
+
+
+				// MAYBE setup watchers here?!???!?!?!
+				const _bindings = {};
+				_observe(vdom._controller, _bindings, () => {
+					// Framework detected changes should cause the component to re-render.
+					vdom.ComponentShouldChange(true);
+				});
+
+
+
+
+				// Call Render() for the consumer once using whatever's in the template already. There should be no need for them to manually call Render() again since data binding will take over.
+				let renderWith = componentElement.innerHTML;
+
+				// Allow arrow functions, less than, and greater than in the template...
+				renderWith = renderWith.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
+				// Reset the content so IQ can handle rendering.
+				// componentElement.innerHTML = '';
+				// WHAT IS THIS USE CASE AGAIN?!?!?!?!? Removed because child components lose their references when parent innerHTML is overwritten.
+
+				vdom.Render(renderWith);
+
+				// Add self to the global register so global state changes can re-render all components.
+				GLOBAL_COMPONENT_REGISTER.add(vdom);
+		});
+	});
+
 	return {
 		Vdom
 	};
@@ -597,69 +668,3 @@ iqwerty.vdom = (() => {
 // 	}, interval);
 // }
 
-PAGE_LOADED.then(() => {
-	Array.from(document.querySelectorAll(`[data-${COMPONENT}]`))
-		// Reverse the selector so child components can be done first. Lol. This is definitely not the best way to do this but whatevs.
-		.reverse()
-		.forEach(componentElement => {
-			// Find the controller for the component.
-			const controller = window[componentElement.dataset[COMPONENT_DATASET]];
-
-			if(typeof controller !== 'function') {
-				console.error(`The controller for component "${componentElement.dataset[COMPONENT_DATASET]}" does not exist.`);
-				return;
-			}
-
-			// Create a new virtual DOM for the component.
-			const vdom = new iqwerty.vdom.Vdom(componentElement);
-
-
-
-			// Patch the async stuff now (before initializing the controller, otherwise things won't get patched in time).
-			// MAYBE?!?!?!?!?!?!?!?!?
-			// patchWith(vdom);
-
-
-
-			// TODO: Initialize controller here or after initial Render()?
-			/**
-			 * The component controller. Can inject the following dependencies.
-			 * @param {Object} appState The global application state. See APPLICATION_STATE.
-			 * @param {Node} host The host element of the component. This is the component that defines [data-iq-component].
-			 * @param {iqwerty.vdom.Vdom} view The virtual DOM associated with the component. This is useful for manually re-rendering the view when the framework fails to detect changes.
-			 */
-			vdom._controller = new controller({
-				appState: APPLICATION_STATE,
-				host: componentElement,
-				view: vdom,
-			});
-
-
-
-
-			// MAYBE setup watchers here?!???!?!?!
-			const _bindings = {};
-			observe(vdom._controller, _bindings, () => {
-				// Framework detected changes should cause the component to re-render.
-				vdom.ComponentShouldChange(true);
-			});
-
-
-
-
-			// Call Render() for the consumer once using whatever's in the template already. There should be no need for them to manually call Render() again since data binding will take over.
-			let renderWith = componentElement.innerHTML;
-
-			// Allow arrow functions, less than, and greater than in the template...
-			renderWith = renderWith.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-
-			// Reset the content so IQ can handle rendering.
-			// componentElement.innerHTML = '';
-			// WHAT IS THIS USE CASE AGAIN?!?!?!?!? Removed because child components lose their references when parent innerHTML is overwritten.
-
-			vdom.Render(renderWith);
-
-			// Add self to the global register so global state changes can re-render all components.
-			GLOBAL_COMPONENT_REGISTER.add(vdom);
-	});
-});
