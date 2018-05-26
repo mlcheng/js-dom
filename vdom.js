@@ -225,6 +225,7 @@ iqwerty.vdom = (() => {
 		Object.keys(obj).forEach(prop => {
 			if(typeof obj[prop] !== 'number' &&
 				typeof obj[prop] !== 'string' &&
+				typeof obj[prop] !== 'boolean' &&
 				typeof obj[prop] !== 'object') {
 					// We don't want to do anything with functions or things we can't clone/watch properly.
 					return;
@@ -257,7 +258,30 @@ iqwerty.vdom = (() => {
 
 
 	/**
+	 * The abstract base for virtual things in the virtual DOM in this framework.
+	 * @abstract
+	 */
+	function AbstractVirtualNode() {}
+
+	/**
+	 * @abstract
+	 * @return {Boolean} Specifies whether or not the node is an IQ component.
+	 */
+	AbstractVirtualNode.prototype.isComponent = function() {
+		throw new Error('isComponent must be implemented.');
+	};
+
+	/**
+	 * @abstract
+	 * @return {Boolean} Specifies whether or not the node contains an IQ event.
+	 */
+	AbstractVirtualNode.prototype.hasEvent = function() {
+		throw new Error('hasEvent must be implemented.');
+	};
+
+	/**
 	 * Create a DOM node.
+	 * @extends {AbstractVirtualNode}
 	 * @param {String} tag The node type.
 	 * @param {Prop} props A dictionary of node properties and values.
 	 * @param {VirtualElement} children An array of VirtualElements that are a child of the current node.
@@ -269,16 +293,54 @@ iqwerty.vdom = (() => {
 		this.children = children;
 	}
 
+	VirtualElement.prototype = Object.create(AbstractVirtualNode.prototype);
+
+	/**
+	 * @override
+	 */
+	VirtualElement.prototype.isComponent = function() {
+		if(!this.props) {
+			return false;
+		}
+
+		return Array
+			.from(this.props.keys())
+			.some(prop => prop.indexOf(`data-${COMPONENT}`) === 0);
+	};
+
+	/**
+	 * @override
+	 */
+	VirtualElement.prototype.hasEvent = function() {
+		if(!this.props) {
+			return false;
+		}
+
+		return Array
+			.from(this.props.keys())
+			.some(prop => prop.indexOf(IQ_EVENT) === 0);
+	};
+
 	/**
 	 * A virtual text DOM node.
+	 * @extends {AbstractVirtualNode}
+	 * @param {String} text The text stored in the node.
 	 */
-	function TextNode(text) {
-		/**
-		 * The text stored in the node.
-		 * @type {String}
-		 */
+	function VirtualTextNode(text) {
 		this.text = text;
 	}
+
+	VirtualTextNode.prototype = Object.create(AbstractVirtualNode.prototype);
+
+	/**
+	 * @override
+	 */
+	VirtualTextNode.prototype.isComponent = () => false;
+
+	/**
+	 * @override
+	 */
+	VirtualTextNode.prototype.hasEvent = () => false;
 
 	/**
 	 * Parse a string with the DOMParser into DOM components in memory.
@@ -305,15 +367,15 @@ iqwerty.vdom = (() => {
 	}
 
 	/**
-	 * Specifies whether or not the two nodes are different. A VirtualElement or TextNode may be inputs here.
-	 * @param {VirtualElement|TextNode} newVdom
-	 * @param {VirtualElement|TextNode} oldVdom
+	 * Specifies whether or not the two nodes are different. A VirtualElement or VirtualTextNode may be inputs here.
+	 * @param {VirtualElement|VirtualTextNode} newVdom
+	 * @param {VirtualElement|VirtualTextNode} oldVdom
 	 * @return {Boolean}
 	 */
 	function _elementChanged(newVdom, oldVdom) {
 		if(newVdom instanceof VirtualElement && oldVdom instanceof VirtualElement) {
 			return newVdom.tag !== oldVdom.tag;
-		} else if(newVdom instanceof TextNode && oldVdom instanceof TextNode) {
+		} else if(newVdom instanceof VirtualTextNode && oldVdom instanceof VirtualTextNode) {
 			return newVdom.text !== oldVdom.text;
 		}
 		return true;
@@ -324,30 +386,30 @@ iqwerty.vdom = (() => {
 	 * @param {VirtualElement} vdom
 	 * @return {Boolean}
 	 */
-	function _isIqComponent(vdom) {
-		if(!vdom.props) {
-			return false;
-		}
+	// function _isIqComponent(vdom) {
+	// 	if(!vdom.props) {
+	// 		return false;
+	// 	}
 
-		return Array
-			.from(vdom.props.keys())
-			.some(prop => prop.indexOf(`data-${COMPONENT}`) === 0);
-	}
+	// 	return Array
+	// 		.from(vdom.props.keys())
+	// 		.some(prop => prop.indexOf(`data-${COMPONENT}`) === 0);
+	// }
 
 	/**
 	 * Returns true if the VirtualElement includes IQ events.
 	 * @param {VirtualElement} vdom
 	 * @return {Boolean}
 	 */
-	function _hasIqEvent(vdom) {
-		if(!vdom.props) {
-			return false;
-		}
+	// function _hasIqEvent(vdom) {
+	// 	if(!vdom.props) {
+	// 		return false;
+	// 	}
 
-		return Array
-			.from(vdom.props.keys())
-			.some(prop => prop.indexOf(IQ_EVENT) === 0);
-	}
+	// 	return Array
+	// 		.from(vdom.props.keys())
+	// 		.some(prop => prop.indexOf(IQ_EVENT) === 0);
+	// }
 
 	/**
 	 * Handle events on a VirtualElement. If there are events, it tracks them and sets actual event listeners.
@@ -356,7 +418,7 @@ iqwerty.vdom = (() => {
 	 * @param {Object} context The context to execute the event handler in. This is normally the component controller.
 	 */
 	function _handleEvents(el, ve, context) {
-		if(!_hasIqEvent(ve)) {
+		if(!ve.hasEvent()) {
 			return;
 		}
 
@@ -399,7 +461,9 @@ iqwerty.vdom = (() => {
 		// console.log(root, newVdom, oldVdom);
 
 		// Parse the vdom to see if any events are there
-		_handleEvents(root, newVdom, context);
+		// if(newVdom instanceof VirtualElement) {
+			_handleEvents(root, newVdom, context);
+		// }
 
 		if(!oldVdom) {
 			// console.log('adding child');
@@ -414,7 +478,7 @@ iqwerty.vdom = (() => {
 				root.childNodes[childIndex]
 			);
 		// Don't process nested components.
-		} else if(newVdom instanceof VirtualElement && !_isIqComponent(newVdom)) {
+		} else if(newVdom instanceof VirtualElement && !newVdom.isComponent()) {
 			// console.log('diffing children');
 			const newLength = newVdom.children.length;
 			const oldLength = oldVdom.children.length;
@@ -437,7 +501,7 @@ iqwerty.vdom = (() => {
 	 */
 	function _toVirtualElements(node) {
 		if(node.nodeType === Node.TEXT_NODE) {
-			return new TextNode(node.textContent);
+			return new VirtualTextNode(node.textContent);
 		}
 
 		// Transform the node attributes into a Map of attribute to its value.
@@ -460,7 +524,7 @@ iqwerty.vdom = (() => {
 	 * @return {Node}
 	 */
 	function _toElements(ve, context) {
-		if(ve instanceof TextNode) {
+		if(ve instanceof VirtualTextNode) {
 			return document.createTextNode(ve.text);
 		}
 
