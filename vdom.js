@@ -21,8 +21,9 @@ const PAGE_LOADED = new Promise(resolve => {
 		resolve();
 	});
 
-	if(document.readyState === 'interactive') {
-		resolve();
+	if(document.readyState === 'interactive' ||
+		document.readyState === 'complete') {
+			resolve();
 	}
 });
 
@@ -99,6 +100,7 @@ iqwerty.vdom = (() => {
 
 	/**
 	 * Global application state to be injected into components if needed. This is a concept and it may be deleted.
+	 * Note: All updates to the global state may only occur through the `update` method.
 	 * @type {Object}
 	 */
 	const APPLICATION_STATE = (() => {
@@ -129,8 +131,7 @@ iqwerty.vdom = (() => {
 		function update(key, value) {
 			state.set(key, value);
 
-			// console.log('performing global update');
-			// Perform global update.
+			// Perform global update (because this is global state).
 			GLOBAL_COMPONENT_REGISTER.forEach(component => {
 				component.ComponentShouldChange(true);
 			});
@@ -152,7 +153,7 @@ iqwerty.vdom = (() => {
 	})();
 
 	/**
-	 * Allow calling mutating methods on objects.
+	 * Allow calling mutating methods on objects to trigger re-render.
 	 * TODO: Determine if this is actually useful/performant.
 	 * @param {Object} obj The object whose methods we wish to patch.
 	 * @param {Function} action The action to perform when a mutating method is called. Normally, this should be vdom.ComponentShouldChange(true).
@@ -237,9 +238,10 @@ iqwerty.vdom = (() => {
 				get() {
 					return bindings[prop];
 				},
+
 				set(value) {
 					bindings[prop] = value;
-					// console.log('re-render now!');
+					// Re-render the page based.
 					action();
 				}
 			});
@@ -248,6 +250,7 @@ iqwerty.vdom = (() => {
 			__patchAllTheThings(obj[prop], action);
 
 			if(typeof obj[prop] === 'object') {
+				// Recursively observe children if they're observable.
 				_observe(obj[prop], bindings, action);
 			}
 		});
@@ -283,7 +286,7 @@ iqwerty.vdom = (() => {
 	 * Create a DOM node.
 	 * @extends {AbstractVirtualNode}
 	 * @param {String} tag The node type.
-	 * @param {Prop} props A dictionary of node properties and values.
+	 * @param {Map<string, string>} props A dictionary of node properties and values.
 	 * @param {VirtualElement} children An array of VirtualElements that are a child of the current node.
 	 * @return {VirtualElement} Returns a VirtualElement.
 	 */
@@ -374,42 +377,28 @@ iqwerty.vdom = (() => {
 	 */
 	function _elementChanged(newVdom, oldVdom) {
 		if(newVdom instanceof VirtualElement && oldVdom instanceof VirtualElement) {
-			return newVdom.tag !== oldVdom.tag;
+
+			const differentTags = newVdom.tag !== oldVdom.tag;
+
+			const newProps = newVdom.props;
+			const oldProps = oldVdom.props;
+			const differentProps = newProps.size !== oldProps.size ||
+				Array
+					.from(newProps.keys())
+					.some(prop =>
+						newProps.get(prop) !== oldProps.get(prop)) ||
+				Array
+					.from(oldProps.keys())
+					.some(prop =>
+						newProps.get(prop) !== oldProps.get(prop));
+
+			return differentTags || differentProps;
 		} else if(newVdom instanceof VirtualTextNode && oldVdom instanceof VirtualTextNode) {
 			return newVdom.text !== oldVdom.text;
 		}
+
 		return true;
 	}
-
-	/**
-	 * Returns true if the VirtualElement is a component.
-	 * @param {VirtualElement} vdom
-	 * @return {Boolean}
-	 */
-	// function _isIqComponent(vdom) {
-	// 	if(!vdom.props) {
-	// 		return false;
-	// 	}
-
-	// 	return Array
-	// 		.from(vdom.props.keys())
-	// 		.some(prop => prop.indexOf(`data-${COMPONENT}`) === 0);
-	// }
-
-	/**
-	 * Returns true if the VirtualElement includes IQ events.
-	 * @param {VirtualElement} vdom
-	 * @return {Boolean}
-	 */
-	// function _hasIqEvent(vdom) {
-	// 	if(!vdom.props) {
-	// 		return false;
-	// 	}
-
-	// 	return Array
-	// 		.from(vdom.props.keys())
-	// 		.some(prop => prop.indexOf(IQ_EVENT) === 0);
-	// }
 
 	/**
 	 * Handle events on a VirtualElement. If there are events, it tracks them and sets actual event listeners.
@@ -458,28 +447,20 @@ iqwerty.vdom = (() => {
 	 * @param {Object} context The context for parsing and executing IQ events. This should be the component controller.
 	 */
 	function _patch(root, newVdom, oldVdom, context = {}, childIndex = 0) {
-		// console.log(root, newVdom, oldVdom);
-
 		// Parse the vdom to see if any events are there
-		// if(newVdom instanceof VirtualElement) {
-			_handleEvents(root, newVdom, context);
-		// }
+		_handleEvents(root, newVdom, context);
 
 		if(!oldVdom) {
-			// console.log('adding child');
 			root.appendChild(_toElements(newVdom, context));
 		} else if(!newVdom) {
-			// console.log('removing child');
 			root.removeChild(root.childNodes[childIndex]);
 		} else if(_elementChanged(newVdom, oldVdom)) {
-			// console.log('replacing child');
 			root.replaceChild(
 				_toElements(newVdom, context),
 				root.childNodes[childIndex]
 			);
 		// Don't process nested components.
 		} else if(newVdom instanceof VirtualElement && !newVdom.isComponent()) {
-			// console.log('diffing children');
 			const newLength = newVdom.children.length;
 			const oldLength = oldVdom.children.length;
 			for(let i=0; i<newLength || i<oldLength; i++) {
@@ -529,6 +510,11 @@ iqwerty.vdom = (() => {
 		}
 
 		const el = document.createElement(ve.tag);
+
+		// Add the attributes back to the element.
+		ve.props.forEach((value, prop) => {
+			el.setAttribute(prop, value);
+		});
 
 		// Append its children.
 		ve.children
@@ -604,8 +590,8 @@ iqwerty.vdom = (() => {
 		const oldVdom = this._currentState || _parseStringToHtml(root.innerHTML).map(_toVirtualElements);
 
 		// Wrap the old and new nodes in a container. This is because we may have multiple siblings in the root, but patching algo only works on 1 root node.
-		const newNode = new VirtualElement(undefined, undefined, ...newVdom);
-		const oldNode = new VirtualElement(undefined, undefined, ...oldVdom);
+		const newNode = new VirtualElement(undefined, new Map(), ...newVdom);
+		const oldNode = new VirtualElement(undefined, new Map(), ...oldVdom);
 
 		// Now we can patch the DOM.
 		_patch(newRootNode, newNode, oldNode, this._controller);
@@ -619,7 +605,7 @@ iqwerty.vdom = (() => {
 	 * @param {Boolean} _changeDetectedByFramework By default, the change was not detected by the framework. The user had to manually call ComponentShouldChange, meaning that the framework did not know how to handle that specific case of changes.
 	 * In the case of proxied getter/setters, this means the variable was mutated without getting or setting, such as pushing to an array instead of reassigning to a concat'd one.
 	 */
-	function ComponentShouldChange(_changeDetectedByFramework = false) { // omg this works?!
+	function ComponentShouldChange(_changeDetectedByFramework = false) {
 		if(!_changeDetectedByFramework) {
 			console.warn('Automatic change detection is triggered by reassigning a value - such as concatenating instead of pushing to an array. Some mutating methods are allowed in this framework (see MUTATORS). Use of vdom.ComponentShouldChange() is allowed, but discouraged.');
 		}
@@ -676,9 +662,7 @@ iqwerty.vdom = (() => {
 
 
 
-		// Patch the async stuff now (before initializing the controller, otherwise things won't get patched in time).
-		// MAYBE?!?!?!?!?!?!?!?!?
-		// patchWith(vdom);
+		// TODO: Patch asynchronous events to re-render, or just do the old observe thing?
 
 
 
@@ -695,18 +679,11 @@ iqwerty.vdom = (() => {
 			view: vdom,
 		});
 
-
-
-
-		// MAYBE setup watchers here?!???!?!?!
 		const _bindings = {};
 		_observe(vdom._controller, _bindings, () => {
 			// Framework detected changes should cause the component to re-render.
 			vdom.ComponentShouldChange(true);
 		});
-
-
-
 
 		// Call Render() for the consumer once using whatever's in the template already. There should be no need for them to manually call Render() again since data binding will take over.
 		let renderWith = componentElement.innerHTML;
@@ -714,9 +691,9 @@ iqwerty.vdom = (() => {
 		// Allow arrow functions, less than, and greater than in the template...
 		renderWith = renderWith.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
-		// Reset the content so IQ can handle rendering.
+		// TODO: This was originally here and the use case is now unknown. Later removed because child components lose their references when parent innerHTML is overwritten.
+		// // Reset the content so IQ can handle rendering.
 		// componentElement.innerHTML = '';
-		// WHAT IS THIS USE CASE AGAIN?!?!?!?!? Removed because child components lose their references when parent innerHTML is overwritten.
 
 		vdom.Render(renderWith);
 
@@ -755,20 +732,3 @@ iqwerty.vdom = (() => {
 		Load
 	};
 })();
-
-// function patchWith(vdom) {
-// 	const oldSetTimeout = window.setTimeout;
-// 	window.setTimeout = (fn, timeout) => oldSetTimeout(() => {
-// 		fn();
-// 		console.log(vdom);
-// 		vdom.ComponentShouldChange(true);
-// 	}, timeout);
-
-// 	const oldSetInterval = window.setInterval;
-// 	window.setInterval = (fn, interval) => oldSetInterval(() => {
-// 		fn();
-// 		console.log('on interval for', vdom);
-// 		vdom.ComponentShouldChange(true);
-// 	}, interval);
-// }
-

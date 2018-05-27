@@ -2,6 +2,14 @@
 <html>
 <head>
 	<title>asd</title>
+	<style>
+		iq-container {
+			display: block;
+			border: 1px dotted;
+			margin: 5px;
+			padding: 5px;
+		}
+	</style>
 	<script src="vdom.js"></script>
 </head>
 <body>
@@ -23,6 +31,7 @@
 	<div data-iq-component="TwoWayBindingComponent">
 		<input type="text" data-iq:input="this.updateState($iqEvent)">
 		<span>the text is {{this.text}}</span>
+		<div>and the <a href="{{this.text}}" class="{{this.text === 'hello' ? 'good' : 'bad'}}">{{this.text}}</a> link.</div>
 	</div>
 
 
