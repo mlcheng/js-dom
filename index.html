@@ -31,7 +31,7 @@
 	<div data-iq-component="TwoWayBindingComponent">
 		<input type="text" data-iq:input="this.updateState($iqEvent)">
 		<span>the text is {{this.text}}</span>
-		<div>and the <a href="{{this.text}}" class="{{this.text === 'hello' ? 'good' : 'bad'}}">{{this.text}}</a> link.</div>
+		<div>and the <a href="{{this.text}}" class="{{this.text === 'hello' ? 'good' : 'bad'}}" data-iq:click="this.alert($iqEvent);">{{this.text}}</a> link.</div>
 	</div>
 
 
@@ -109,6 +109,11 @@
 		this.text = 'hello';
 
 		host.querySelector('input').value = this.text;
+
+		this.alert = (e) => {
+			alert(this.text);
+			e.preventDefault();
+		};
 	}
 </script>
 </html>

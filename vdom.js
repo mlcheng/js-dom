@@ -447,9 +447,6 @@ iqwerty.vdom = (() => {
 	 * @param {Object} context The context for parsing and executing IQ events. This should be the component controller.
 	 */
 	function _patch(root, newVdom, oldVdom, context = {}, childIndex = 0) {
-		// Parse the vdom to see if any events are there
-		_handleEvents(root, newVdom, context);
-
 		if(!oldVdom) {
 			root.appendChild(_toElements(newVdom, context));
 		} else if(!newVdom) {
@@ -473,6 +470,10 @@ iqwerty.vdom = (() => {
 				);
 			}
 		}
+
+		// Parse the vdom to see if any events are there. This has to happen after the above patching is done, otherwise the node may be replaced by patching.
+		// There was once a bug here by sending in root as the element instead of the child. This caused the entire component to be passed as the element, causing the entire component to have the event listener attached.
+		_handleEvents(root.childNodes[childIndex], newVdom, context);
 	}
 
 	/**
