@@ -124,12 +124,12 @@
 		};
 	}
 
-	function ToDoApp({host}) {
+	function ToDoApp({host: a}) {
 		// TODO: If this starts as empty, it fails.
 		this.items = ['Buy stuff'];
 
 		this.addItem = () => {
-			const todo = host.querySelector('input');
+			const todo = a.querySelector('input');
 			this.items.push(todo.value)
 
 			todo.value = '';

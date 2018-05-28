@@ -41,7 +41,7 @@ The component controller has a few dependencies that can be injected by the fram
 The component controller can inject a global application state managed by the framework.
 
 ```js
-function TimerComponent({state: appState}) {}
+function TimerComponent({appState: state}) {}
 ```
 
 The application state has the following methods:
@@ -76,14 +76,14 @@ Note that this is all experimental.
 The component controller can inject the component host as a native DOM element, i.e. the element containing the `data-iq-component`.
 
 ```js
-function TimerComponent({cmp: host}) {}
+function TimerComponent({host: cmp}) {}
 ```
 
 #### Virtual DOM
 The component controller can inject the virtual DOM. This reveals a single method: `ComponentShouldChange()`. Use this when the view should be updated based on state changes, but it failed to work.
 
 ```js
-function TimerComponent({vdom: view}) {}
+function TimerComponent({view: vdom}) {}
 ```
 
 *In case you're curious, this framework works by observing enumerable properties of an object. Sometimes, weird things like nested `Map`s don't get observed well. Changes to those nested values may not propagate correctly.*
