@@ -36,7 +36,7 @@
 
 	<div data-iq-component="ToDoApp">
 		<ul>
-			{{this.items.map(item => `<li>${item}</li>`).join('')}}
+			{{this.renderItems()}}
 		</ul>
 		<input type="text" placeholder="todo item">
 		<button data-iq:click="this.addItem()">add</button>
@@ -124,16 +124,29 @@
 		};
 	}
 
-	function ToDoApp({host: a}) {
+	function ToDoApp({host}) {
 		// TODO: If this starts as empty, it fails.
-		this.items = ['Buy stuff'];
+		this.items = [];
 
 		this.addItem = () => {
-			const todo = a.querySelector('input');
+			const todo = host.querySelector('input');
 			this.items.push(todo.value)
 
 			todo.value = '';
 			todo.focus();
+			iqwerty.vdom.Load(host);
+		};
+
+		this.renderItems = () => {
+			// Wow, adding a new line works but this breaks it.
+			return this.items.map(item => `<li data-iq-component="ToDoItem">
+				<span data-iq:click="this.al()">${item}</span></li>`).join('');
+		}
+	}
+
+	function ToDoItem() {
+		this.al = () => {
+			alert('hi');
 		};
 	}
 </script>
