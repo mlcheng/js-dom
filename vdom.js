@@ -189,7 +189,7 @@ iqwerty.vdom = (() => {
 	 */
 	function _saferEval(js, context) {
 		try {
-			// TODO: Maybe don't do with()?
+			// TODO: Maybe don't do with()? An option is to use destructuring, but how to avoid window methods?
 			// jshint evil:true
 			return (new Function(`
 				with(this) {
@@ -690,7 +690,10 @@ iqwerty.vdom = (() => {
 		let renderWith = componentElement.innerHTML;
 
 		// Allow arrow functions, less than, and greater than in the template...
-		renderWith = renderWith.replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+		renderWith = renderWith
+			.replace(/&lt;/g, '<')
+			.replace(/&gt;/g, '>')
+			.replace(/&amp;/g, '&');
 
 		// TODO: This was originally here and the use case is now unknown. Later removed because child components lose their references when parent innerHTML is overwritten.
 		// // Reset the content so IQ can handle rendering.
