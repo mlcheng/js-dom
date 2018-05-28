@@ -34,6 +34,14 @@
 		<div>and the <a href="{{this.text}}" class="{{this.text === 'hello' ? 'good' : 'bad'}}" data-iq:click="this.alert($iqEvent);">{{this.text}}</a> link.</div>
 	</div>
 
+	<div data-iq-component="ToDoApp">
+		<ul>
+			{{this.items.map(item => `<li>${item}</li>`).join('')}}
+		</ul>
+		<input type="text" placeholder="todo item">
+		<button data-iq:click="this.addItem()">add</button>
+	</div>
+
 
 	<!-- Maybe someday... -->
 	<!-- <div data-iq-component="Component"><ul><li data-iq-for="let item of items">{{item}}</li></ul></div> -->
@@ -113,6 +121,19 @@
 		this.alert = (e) => {
 			alert(this.text);
 			e.preventDefault();
+		};
+	}
+
+	function ToDoApp({host}) {
+		// TODO: If this starts as empty, it fails.
+		this.items = ['Buy stuff'];
+
+		this.addItem = () => {
+			const todo = host.querySelector('input');
+			this.items.push(todo.value)
+
+			todo.value = '';
+			todo.focus();
 		};
 	}
 </script>
