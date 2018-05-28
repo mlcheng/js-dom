@@ -355,7 +355,10 @@ iqwerty.vdom = (() => {
 		const componentRoot = document.createDocumentFragment();
 		const children = Array.from(content.childNodes);
 
-		if(children.length && children[0] && children[0].nodeType !== Node.TEXT_NODE) {
+		if((children.length &&
+			children[0] &&
+			children[0].nodeType !== Node.TEXT_NODE) &&
+			(/^\s/.test(html))) {
 			// TODO: Figure out if this really solves the problem.
 			// Add an empty text node to the beginning. The problem is that the DOMParser doesn't add the text nodes in the beginning of the string. So if there is a new line before the first element, it doesn't add it to the structure.
 			// We add an empty text node here so the VDOM can have the same representation as the real one.

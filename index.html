@@ -48,7 +48,8 @@
 </body>
 <script>
 	'use strict';
-	/* exported Component, TimerComponent, ParentComponent, TwoWayBindingComponent */
+	/* global iqwerty */
+	/* exported Component, TimerComponent, ParentComponent, TwoWayBindingComponent, ToDoApp, ToDoItem */
 	function Component({ view, appState }) {
 		setTimeout(() => {
 			this.keyword = 'lll';
@@ -130,7 +131,7 @@
 
 		this.addItem = () => {
 			const todo = host.querySelector('input');
-			this.items.push(todo.value)
+			this.items.push(todo.value);
 
 			todo.value = '';
 			todo.focus();
@@ -138,15 +139,13 @@
 		};
 
 		this.renderItems = () => {
-			// Wow, adding a new line works but this breaks it.
-			return this.items.map(item => `<li data-iq-component="ToDoItem">
-				<span data-iq:click="this.al()">${item}</span></li>`).join('');
-		}
+			return this.items.map(item => `<li data-iq-component="ToDoItem"><span data-iq:click="this.alert()">${item}</span></li>`).join('');
+		};
 	}
 
-	function ToDoItem() {
-		this.al = () => {
-			alert('hi');
+	function ToDoItem({host}) {
+		this.alert = () => {
+			alert(`The item added is ${host.textContent}`);
 		};
 	}
 </script>
