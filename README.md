@@ -62,11 +62,11 @@ Here's a quick example of how the global app state can be used.
 
 ```js
 function AppComponent({appState}) {
-    appState.create('user', undefined);
+	appState.create('user', undefined);
 }
 
 function LoginComponent({appState}) {
-    appState.update('user', 'michael');
+	appState.update('user', 'michael');
 }
 ```
 
@@ -100,12 +100,12 @@ Events handled by the framework are known as `IQ Events`. You can specify these 
 
 ```js
 function TimerComponent() {
-    this.time = {
+	this.time = {
 		seconds = 0,
 	};
 
 	this.reset = () => {
-	    this.time.seconds = 0;
+		this.time.seconds = 0;
 	};
 
 	setInterval(() => {
@@ -118,8 +118,8 @@ Unlike my [previous data binding library](https://github.com/mlcheng/js-binding)
 
 ```html
 <div data-iq-component="TwoWayBindingComponent">
-    <input type="text" data-iq:input="this.updateState($iqEvent)">
-    <span>The text is: {{this.text}}</span>
+	<input type="text" data-iq:input="this.updateState($iqEvent)">
+	<span>The text is: {{this.text}}</span>
 </div>
 ```
 
@@ -127,13 +127,13 @@ You may have noticed the `$iqEvent` variable. This is a special magic variable u
 
 ```js
 function TwoWayBindingComponent({host}) {
-    this.text = 'Hi!';
-    this.updateState = (event) => {
-        this.text = event.target.value;
-    };
+	this.text = 'Hi!';
+	this.updateState = (event) => {
+		this.text = event.target.value;
+	};
 
-    // Start out with `Hi!` as the text.
-    host.querySelector('input').value = this.text;
+	// Start out with `Hi!` as the text.
+	host.querySelector('input').value = this.text;
 }
 ```
 
@@ -149,26 +149,26 @@ Child nodes can be rendered in the template syntax as well. Here's a quick to-do
 
 ```html
 <div data-iq-component="ToDoApp">
-    <ul>
-        {{this.items.map(item => `<li>${item}</li>`).join('')}}
-    </ul>
+	<ul>
+		{{this.items.map(item => `<li>${item}</li>`).join('')}}
+	</ul>
 
-    <input type="text" placeholder="todo item">
-    <button data-iq:click="this.addItem()">add</button>
+	<input type="text" placeholder="todo item">
+	<button data-iq:click="this.addItem()">add</button>
 </div>
 ```
 
 ```js
 function ToDoApp({host}) {
-    this.items = ['Buy milk'];
+	this.items = ['Buy milk'];
 
-    this.addItem = () => {
-        const todo = host.querySelector('input');
-        this.items.push(todo.value);
+	this.addItem = () => {
+		const todo = host.querySelector('input');
+		this.items.push(todo.value);
 
-        todo.value = '';
-        todo.focus();
-    };
+		todo.value = '';
+		todo.focus();
+	};
 }
 ```
 
