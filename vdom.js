@@ -181,6 +181,10 @@ iqwerty.vdom = (() => {
 	 */
 	function _noop() {}
 
+	function _defined(e) {
+		return e !== undefined;
+	}
+
 	/**
 	 * A maybe-safer eval that does not allow global context.
 	 * @param {String} js Some JS to evaluate.
@@ -355,15 +359,15 @@ iqwerty.vdom = (() => {
 		const componentRoot = document.createDocumentFragment();
 		const children = Array.from(content.childNodes);
 
-		if((children.length &&
-			children[0] &&
-			children[0].nodeType !== Node.TEXT_NODE) &&
-			(/^\s/.test(html))) {
-			// TODO: Figure out if this really solves the problem.
-			// Add an empty text node to the beginning. The problem is that the DOMParser doesn't add the text nodes in the beginning of the string. So if there is a new line before the first element, it doesn't add it to the structure.
-			// We add an empty text node here so the VDOM can have the same representation as the real one.
-			children.unshift(document.createTextNode(undefined));
-		}
+		// if((children.length &&
+		// 	children[0] &&
+		// 	children[0].nodeType !== Node.TEXT_NODE) &&
+		// 	(/^\s/.test(html))) {
+		// 	// TODO: Figure out if this really solves the problem.
+		// 	// Add an empty text node to the beginning. The problem is that the DOMParser doesn't add the text nodes in the beginning of the string. So if there is a new line before the first element, it doesn't add it to the structure.
+		// 	// We add an empty text node here so the VDOM can have the same representation as the real one.
+		// 	children.unshift(document.createTextNode(undefined));
+		// }
 
 		children.forEach(child => {
 			componentRoot.appendChild(child);
@@ -427,8 +431,13 @@ iqwerty.vdom = (() => {
 
 			iqEvents.forEach(iqEvent => {
 				const event = iqEvent.split(IQ_EVENT)[1];
+				console.log(event, el, context);
 
 				const fn = (e) => {
+					if(e.target !== el) {
+						return;
+					}
+
 					const action = ve.props.get(iqEvent);
 
 					// Inject the event as `$iqEvent`. This can then be used in the event handler.
@@ -450,22 +459,37 @@ iqwerty.vdom = (() => {
 	 * @param {Object} context The context for parsing and executing IQ events. This should be the component controller.
 	 */
 	function _patch(root, newVdom, oldVdom, context = {}, childIndex = 0) {
+
+		console.log(root, newVdom, oldVdom);
+		// if(root.childNodes[childIndex] && root.childNodes[childIndex].nodeType !== Node.TEXT_NODE && root.childNodes[childIndex].tagName.toLowerCase() === CONTAINER_TAG) {//root.childNodes[childIndex].dataset[COMPONENT_DATASET] && root.childNodes[childIndex].dataset[COMPONENT_DATASET] !== context.constructor.name) {
+		// 	return;
+		// }
+		// debugger;
 		if(!oldVdom) {
-			root.appendChild(_toElements(newVdom, context));
+			const appended = root.appendChild(_toElements(newVdom, context));
+			_handleEvents(appended, newVdom, context);
+			return;
 		} else if(!newVdom) {
-			root.removeChild(root.childNodes[childIndex]);
+			const thing = Array.from(root.childNodes).filter(child => !/^\s+$/.test(child.textContent));
+			root.removeChild(thing[childIndex]);
+			return;
 		} else if(_elementChanged(newVdom, oldVdom)) {
+			const thing = Array.from(root.childNodes).filter(child => !/^\s+$/.test(child.textContent));
+			const newthing = _toElements(newVdom, context);
 			root.replaceChild(
-				_toElements(newVdom, context),
-				root.childNodes[childIndex]
+				newthing,
+				thing[childIndex]
 			);
+			_handleEvents(newthing, newVdom, context);
+			return;
 		// Don't process nested components.
-		} else if(newVdom instanceof VirtualElement && !newVdom.isComponent()) {
+		} else if(newVdom instanceof VirtualElement) {
 			const newLength = newVdom.children.length;
 			const oldLength = oldVdom.children.length;
+			const thing = Array.from(root.childNodes).filter(child => !/^\s+$/.test(child.textContent));
 			for(let i=0; i<newLength || i<oldLength; i++) {
 				_patch(
-					root.childNodes[childIndex],
+					thing[childIndex],
 					newVdom.children[i],
 					oldVdom.children[i],
 					context,
@@ -476,7 +500,8 @@ iqwerty.vdom = (() => {
 
 		// Parse the vdom to see if any events are there. This has to happen after the above patching is done, otherwise the node may be replaced by patching.
 		// There was once a bug here by sending in root as the element instead of the child. This caused the entire component to be passed as the element, causing the entire component to have the event listener attached.
-		_handleEvents(root.childNodes[childIndex], newVdom, context);
+		const thing = Array.from(root.childNodes).filter(child => !/^\s+$/.test(child.textContent));
+		_handleEvents(thing[childIndex], newVdom, context);
 	}
 
 	/**
@@ -486,6 +511,9 @@ iqwerty.vdom = (() => {
 	 */
 	function _toVirtualElements(node) {
 		if(node.nodeType === Node.TEXT_NODE) {
+			if(/^\s+$/.test(node.textContent)) {
+				return;
+			}
 			return new VirtualTextNode(node.textContent);
 		}
 
@@ -497,7 +525,7 @@ iqwerty.vdom = (() => {
 		const el = new VirtualElement(
 			node.nodeName.toLowerCase(),
 			attrs,
-			...Array.from(node.childNodes).map(_toVirtualElements)
+			...Array.from(node.childNodes).map(_toVirtualElements).filter(_defined)
 		);
 
 		return el;
@@ -510,6 +538,9 @@ iqwerty.vdom = (() => {
 	 */
 	function _toElements(ve, context) {
 		if(ve instanceof VirtualTextNode) {
+			if(/^\s+$/.test(ve.text)) {
+				return;
+			}
 			return document.createTextNode(ve.text);
 		}
 
@@ -523,6 +554,7 @@ iqwerty.vdom = (() => {
 		// Append its children.
 		ve.children
 			.map(child => _toElements(child, context))
+			.filter(_defined)
 			.forEach(child => {
 				el.appendChild(child);
 			});
@@ -590,8 +622,8 @@ iqwerty.vdom = (() => {
 		// It must be called with the component controller as context, because the bindings use the controller.
 		html = _parseBindings(html, this._controller);
 
-		const newVdom = _parseStringToHtml(html).map(_toVirtualElements);
-		const oldVdom = this._currentState || _parseStringToHtml(root.innerHTML).map(_toVirtualElements);
+		const newVdom = _parseStringToHtml(html).map(_toVirtualElements).filter(_defined);
+		const oldVdom = this._currentState || _parseStringToHtml(root.innerHTML).map(_toVirtualElements).filter(_defined);
 
 		// Wrap the old and new nodes in a container. This is because we may have multiple siblings in the root, but patching algo only works on 1 root node.
 		const newNode = new VirtualElement(undefined, new Map(), ...newVdom);
@@ -729,7 +761,7 @@ iqwerty.vdom = (() => {
 			// Only handle unresolved components.
 			.filter(el => !el[COMPONENT_RESOLVED_SYMBOL])
 			// Reverse the selector so child components can be done first. Lol. This is definitely not the best way to do this but whatevs.
-			.reverse()
+			// .reverse()
 			.forEach(el => {
 				_resolveComponent(el);
 			});

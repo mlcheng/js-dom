@@ -13,7 +13,7 @@
 	<script src="vdom.js"></script>
 </head>
 <body>
-	<div data-iq-component="Component">{{this.keyword}} {{location}} is cool: {{this.appState.get('cool')}}</div>
+<!-- 	<div data-iq-component="Component">{{this.keyword}} {{location}} is cool: {{this.appState.get('cool')}}</div>
 	<div data-iq-component="Component">hello {{this.keyword}}!<ul>{{this.items.map(item => '<li>' + item + '</li>').join('')}}</ul></div>
 	<div data-iq-component="TimerComponent">{{this.time.minutes}} <span>minutes ({{time.seconds}} seconds) have passed since you opened this page</span></div>
 
@@ -32,7 +32,7 @@
 		<input type="text" data-iq:input="this.updateState($iqEvent)">
 		<span>the text is {{this.text}}</span>
 		<div>and the <a href="{{this.text}}" class="{{this.text === 'hello' ? 'good' : 'bad'}}" data-iq:click="this.alert($iqEvent);">{{this.text}}</a> link.</div>
-	</div>
+	</div> -->
 
 	<div data-iq-component="ToDoApp">
 		<ul>
@@ -40,6 +40,7 @@
 		</ul>
 		<input type="text" placeholder="todo item">
 		<button data-iq:click="this.addItem()">add</button>
+		<button data-iq:click="this.removeLastItem()">remove last</button>
 	</div>
 
 
@@ -138,14 +139,30 @@
 			iqwerty.vdom.Load(host);
 		};
 
+		this.removeLastItem = () => {
+			console.log(this.items);
+			this.items.splice(0, 1);
+			// iqwerty.vdom.Load(host);
+		};
+
+		this.removeItem = (e) => {
+			// iqwerty.vdom.Load(host);
+			this.items.splice(this.items.indexOf(e.detail), 1);
+		};
+
 		this.renderItems = () => {
-			return this.items.map(item => `<li data-iq-component="ToDoItem"><span data-iq:click="this.alert()">${item}</span></li>`).join('');
+			return this.items.map(item => `<li data-iq-component="ToDoItem" data-iq:deleteitem="this.removeItem($iqEvent)"><span data-iq:click="this.alert()">${item}</span></li>`).join('');
 		};
 	}
 
 	function ToDoItem({host}) {
 		this.alert = () => {
 			alert(`The item added is ${host.textContent}`);
+
+			const event = new CustomEvent('deleteitem', {
+				detail: host.textContent,
+			});
+			host.dispatchEvent(event);
 		};
 	}
 </script>
