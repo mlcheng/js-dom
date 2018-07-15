@@ -2,7 +2,7 @@
 
   "vdom.js"
 
-  Created by Michael Cheng on 04/30/2018 20:18
+  Created by Michael Cheng and Jessie Jiang on 06/03/2018 16:23
             http://michaelcheng.us/
             michael@michaelcheng.us
             --All Rights Reserved--
@@ -28,32 +28,27 @@ const PAGE_LOADED = new Promise(resolve => {
 });
 
 PAGE_LOADED.then(() => {
-	iqwerty.vdom.Load(document);
+	iqwerty.vdom.Load(document.body);
 });
 
 iqwerty.vdom = (() => {
-	const CONTAINER_TAG = 'iq-container';
-
 	const COMPONENT = 'iq-component';
 	const COMPONENT_DATASET = 'iqComponent';
+	const BINDING = '\{\{(.*?)\}\}';
 
 	const IQ_EVENT = 'data-iq:';
+	const IQ_DIRECTIVE = 'data-iq.';
+	const IQ_IF_DIRECTIVE = `${IQ_DIRECTIVE}if`;
+	// const IQ_FOR_DIRECTIVE = `${IQ_DIRECTIVE}for`;
 	const IQ_EVENT_INJECTION = '$iqEvent';
 
 	/**
-	 * Used as a property name on a Node to keep track of IQ listeners that are set on the Node.
-	 * TODO: Figure out if this is a good thing to do.....
-	 * @type {Symbol}
+	 * Define a blacklist of global properties that consumers shouldn't be able to use in their template. For example, `location` instead of `window.location`.
 	 */
-	const LISTENERS_SYMBOL = Symbol('listeners');
-
-	/**
-	 * Used to specify that an IQ component Node has been resolved already and should not be touched anymore by external iqwerty.vdom.Load() calls.
-	 * @type {Symbol}
-	 */
-	const COMPONENT_RESOLVED_SYMBOL = Symbol('componentResolved');
-
-	const BINDING = '\{\{(.*?)\}\}';
+	const BLACKLIST = Object.getOwnPropertyNames(window)
+		.reduce((blacklist, prop) => Object.assign(blacklist, {
+			[prop]: undefined
+		}), {});
 
 	/**
 	 * Define a mapping of classes to its mutating methods. This is used for change detection. The framework proxies mutating methods and allows the UI to re-render when a mutating method is used.
@@ -85,72 +80,59 @@ iqwerty.vdom = (() => {
 	};
 
 	/**
-	 * Define a blacklist of global properties that consumers shouldn't be able to use in their template. For example, `location` instead of `window.location`.
+	 * Used to specify that an IQ component Node has been resolved already and should not be touched anymore by external iqwerty.vdom.Load() calls.
+	 * @type {Symbol}
 	 */
-	const BLACKLIST = Object.getOwnPropertyNames(window)
-		.reduce((blacklist, prop) => Object.assign(blacklist, {
-			[prop]: undefined
-		}), {});
+	const COMPONENT_RESOLVED_SYMBOL = Symbol('componentResolved');
 
 	/**
-	 * Holds references to all components created by the framework. This allows for global state changes.
-	 * @type {Set<Vdom>}
+	 * Used as a property name on a Node to keep track of IQ listeners that are set on the Node.
+	 * TODO: Figure out if this is a good thing to do.....
+	 * @type {Symbol}
 	 */
-	const GLOBAL_COMPONENT_REGISTER = new Set();
+	const LISTENERS_SYMBOL = Symbol('listeners');
 
 	/**
-	 * Global application state to be injected into components if needed. This is a concept and it may be deleted.
-	 * Note: All updates to the global state may only occur through the `update` method.
-	 * @type {Object}
+	 * Observe an object and use the given bindings as storage. If an action is specified, it is called when the object has changes.
+	 * @param {Object} obj The object to observe.
+	 * @param {Object} bindings The object to store object values in.
+	 * @param {Function} action The callback when changes occur.
 	 */
-	const APPLICATION_STATE = (() => {
-		const state = new Map();
+	function _observe(obj, bindings, action = () => {}) {
+		Object.keys(obj).forEach(prop => {
+			if(typeof obj[prop] !== 'number' &&
+				typeof obj[prop] !== 'string' &&
+				typeof obj[prop] !== 'boolean' &&
+				typeof obj[prop] !== 'object' &&
+				typeof obj[prop] !== 'undefined') {
+					// We don't want to do anything with functions or things we can't clone/watch properly.
+					return;
+			}
 
-		/**
-		 * Returns all entries in the global state.
-		 * @return {Object}
-		 */
-		function all() {
-			return Array
-				.from(state.entries())
-				.reduce((obj, [key, value]) => Object.assign(obj, {
-					[key]: value
-				}), {});
-		}
+			// Set the original value first.
+			bindings[prop] = obj[prop];
+			Object.defineProperty(obj, prop, {
+				get() {
+					return bindings[prop];
+				},
 
-		/**
-		 * Create an entry in the global state without rendering changes in the UI. This is useful for initializing application state.
-		 */
-		function create(key, value) {
-			state.set(key, value);
-		}
-
-		/**
-		 * Update a value in the global state. Renders changes in all components.
-		 */
-		function update(key, value) {
-			state.set(key, value);
-
-			// Perform global update (because this is global state).
-			GLOBAL_COMPONENT_REGISTER.forEach(component => {
-				component.ComponentShouldChange(true);
+				set(value) {
+					bindings[prop] = value;
+					// Re-render the page when new values are set.
+					action();
+				}
 			});
-		}
 
-		/**
-		 * Get an entry from the global state.
-		 */
-		function get(key) {
-			return state.get(key);
-		}
+			// TODO: Determine if this is actually useful/performant.
+			if(obj[prop] !== undefined)
+			_patchObjectMutators(obj[prop], action);
 
-		return {
-			all,
-			create,
-			update,
-			get,
-		};
-	})();
+			if(typeof obj[prop] === 'object') {
+				// Recursively observe children if they're observable.
+				_observe(obj[prop], bindings, action);
+			}
+		});
+	}
 
 	/**
 	 * Allow calling mutating methods on objects to trigger re-render.
@@ -158,7 +140,7 @@ iqwerty.vdom = (() => {
 	 * @param {Object} obj The object whose methods we wish to patch.
 	 * @param {Function} action The action to perform when a mutating method is called. Normally, this should be vdom.ComponentShouldChange(true).
 	 */
-	function __patchAllTheThings(obj, action) {
+	function _patchObjectMutators(obj, action) {
 		const klass = obj.constructor.name;
 		const mutators = MUTATORS[klass];
 
@@ -174,15 +156,6 @@ iqwerty.vdom = (() => {
 				return ret;
 			};
 		});
-	}
-
-	/**
-	 * Noop function used as a default function value when needed.
-	 */
-	function _noop() {}
-
-	function _defined(e) {
-		return e !== undefined;
 	}
 
 	/**
@@ -221,432 +194,368 @@ iqwerty.vdom = (() => {
 	}
 
 	/**
-	 * Observe an object and use the given bindings as storage. If an action is specified, it is called when the object has changes.
-	 * @param {Object} obj The object to observe.
-	 * @param {Object} bindings The object to store object values in.
-	 * @param {Function} action The callback when changes occur.
+	 * Performs an action for each descendant node.
+	 * @param {Node} node
+	 * @param {Function} fn
 	 */
-	function _observe(obj, bindings, action = _noop) {
-		Object.keys(obj).forEach(prop => {
-			if(typeof obj[prop] !== 'number' &&
-				typeof obj[prop] !== 'string' &&
-				typeof obj[prop] !== 'boolean' &&
-				typeof obj[prop] !== 'object') {
-					// We don't want to do anything with functions or things we can't clone/watch properly.
-					return;
-			}
-
-			// Set the original value first.
-			bindings[prop] = obj[prop];
-			Object.defineProperty(obj, prop, {
-				get() {
-					return bindings[prop];
-				},
-
-				set(value) {
-					bindings[prop] = value;
-					// Re-render the page based.
-					action();
-				}
-			});
-
-			// TODO: Determine if this is actually useful/performant.
-			__patchAllTheThings(obj[prop], action);
-
-			if(typeof obj[prop] === 'object') {
-				// Recursively observe children if they're observable.
-				_observe(obj[prop], bindings, action);
-			}
-		});
-	}
-
-
-	// === Begin framework code === //
-
-
-	/**
-	 * The abstract base for virtual things in the virtual DOM in this framework.
-	 * @abstract
-	 */
-	function AbstractVirtualNode() {}
-
-	/**
-	 * @abstract
-	 * @return {Boolean} Specifies whether or not the node is an IQ component.
-	 */
-	AbstractVirtualNode.prototype.isComponent = function() {
-		throw new Error('isComponent must be implemented.');
-	};
-
-	/**
-	 * @abstract
-	 * @return {Boolean} Specifies whether or not the node contains an IQ event.
-	 */
-	AbstractVirtualNode.prototype.hasEvent = function() {
-		throw new Error('hasEvent must be implemented.');
-	};
-
-	/**
-	 * Create a DOM node.
-	 * @extends {AbstractVirtualNode}
-	 * @param {String} tag The node type.
-	 * @param {Map<string, string>} props A dictionary of node properties and values.
-	 * @param {VirtualElement} children An array of VirtualElements that are a child of the current node.
-	 * @return {VirtualElement} Returns a VirtualElement.
-	 */
-	function VirtualElement(tag, props, ...children) {
-		this.tag = tag;
-		this.props = props;
-		this.children = children;
-	}
-
-	VirtualElement.prototype = Object.create(AbstractVirtualNode.prototype);
-
-	/**
-	 * @override
-	 */
-	VirtualElement.prototype.isComponent = function() {
-		if(!this.props) {
-			return false;
+	function _forAllChildrenOf(node, fn) {
+		const iterator = [node];
+		while(iterator.length) {
+			const el = iterator.pop();
+			fn(el);
+			iterator.push(...el.childNodes);
 		}
-
-		return Array
-			.from(this.props.keys())
-			.some(prop => prop.indexOf(`data-${COMPONENT}`) === 0);
-	};
-
-	/**
-	 * @override
-	 */
-	VirtualElement.prototype.hasEvent = function() {
-		if(!this.props) {
-			return false;
-		}
-
-		return Array
-			.from(this.props.keys())
-			.some(prop => prop.indexOf(IQ_EVENT) === 0);
-	};
-
-	/**
-	 * A virtual text DOM node.
-	 * @extends {AbstractVirtualNode}
-	 * @param {String} text The text stored in the node.
-	 */
-	function VirtualTextNode(text) {
-		this.text = text;
-	}
-
-	VirtualTextNode.prototype = Object.create(AbstractVirtualNode.prototype);
-
-	/**
-	 * @override
-	 */
-	VirtualTextNode.prototype.isComponent = () => false;
-
-	/**
-	 * @override
-	 */
-	VirtualTextNode.prototype.hasEvent = () => false;
-
-	/**
-	 * Parse a string with the DOMParser into DOM components in memory.
-	 * @return {Node} Returns the HTML wrapped in a single component.
-	 * @return {Node[]} Returns the array of children in the DocumentFragment.
-	 */
-	function _parseStringToHtml(html) {
-		const content = new DOMParser().parseFromString(html, 'text/html').body;
-		const componentRoot = document.createDocumentFragment();
-		const children = Array.from(content.childNodes);
-
-		// if((children.length &&
-		// 	children[0] &&
-		// 	children[0].nodeType !== Node.TEXT_NODE) &&
-		// 	(/^\s/.test(html))) {
-		// 	// TODO: Figure out if this really solves the problem.
-		// 	// Add an empty text node to the beginning. The problem is that the DOMParser doesn't add the text nodes in the beginning of the string. So if there is a new line before the first element, it doesn't add it to the structure.
-		// 	// We add an empty text node here so the VDOM can have the same representation as the real one.
-		// 	children.unshift(document.createTextNode(undefined));
-		// }
-
-		children.forEach(child => {
-			componentRoot.appendChild(child);
-		});
-
-		return Array.from(componentRoot.childNodes);
 	}
 
 	/**
-	 * Specifies whether or not the two nodes are different. A VirtualElement or VirtualTextNode may be inputs here.
-	 * @param {VirtualElement|VirtualTextNode} newVdom
-	 * @param {VirtualElement|VirtualTextNode} oldVdom
+	 * Determines whether an HTML node is an IQ component.
+	 * @param {Node} node
 	 * @return {Boolean}
 	 */
-	function _elementChanged(newVdom, oldVdom) {
-		if(newVdom instanceof VirtualElement && oldVdom instanceof VirtualElement) {
-
-			const differentTags = newVdom.tag !== oldVdom.tag;
-
-			const newProps = newVdom.props;
-			const oldProps = oldVdom.props;
-			const differentProps = newProps.size !== oldProps.size ||
-				Array
-					.from(newProps.keys())
-					.some(prop =>
-						newProps.get(prop) !== oldProps.get(prop)) ||
-				Array
-					.from(oldProps.keys())
-					.some(prop =>
-						newProps.get(prop) !== oldProps.get(prop));
-
-			return differentTags || differentProps;
-		} else if(newVdom instanceof VirtualTextNode && oldVdom instanceof VirtualTextNode) {
-			return newVdom.text !== oldVdom.text;
-		}
-
-		return true;
+	function _nodeIsComponent(node) {
+		return node.nodeType === Node.ELEMENT_NODE &&
+			node.dataset &&
+			node.dataset[COMPONENT_DATASET];
 	}
 
 	/**
-	 * Handle events on a VirtualElement. If there are events, it tracks them and sets actual event listeners.
-	 * @param {Node} el The actual HTML element associated with the VirtualElement. Event listeners will be set on this element.
-	 * @param {VirtualElement} ve
-	 * @param {Object} context The context to execute the event handler in. This is normally the component controller.
+	 * Finds the IQ component of a given node.
+	 * @param {Node} node
+	 * @return {String}
 	 */
-	function _handleEvents(el, ve, context) {
-		if(!ve.hasEvent()) {
-			return;
+	function _findComponentOfNode(node) {
+		const iterator = [node];
+		while(iterator.length) {
+			const possibleComponent = iterator.pop();
+
+			if(_nodeIsComponent(possibleComponent)) {
+				return possibleComponent.dataset[COMPONENT_DATASET];
+			}
+
+			if(possibleComponent.parentElement) {
+				iterator.push(possibleComponent.parentElement);
+			} else {
+				console.error('Node has no component.', possibleComponent);
+			}
 		}
+	}
 
-		// Track listeners set on the element by adding a secret property on it.
-		if(el[LISTENERS_SYMBOL] === undefined) {
-			el[LISTENERS_SYMBOL] = new Set();
-		}
+	/**
+	 * Recursively remove empty text nodes from a node.
+	 * @param {Node} root
+	 * @return {Node} Return the node with no more empty text nodes.
+	 */
+	function _removeEmptyNodes(root) {
+		_forAllChildrenOf(root, (child) => {
+			if(child.nodeType === Node.TEXT_NODE && /^\s+$/.test(child.textContent)) {
+				child.parentNode.removeChild(child);
+			}
+		});
 
-		// Assign event listeners if IQ events are set on the element.
-		if(ve.props) {
-			const iqEvents = Array
-				.from(ve.props.keys())
-				.filter(prop => prop.indexOf(IQ_EVENT) === 0);
+		return root;
+	}
 
-			iqEvents.forEach(iqEvent => {
-				const event = iqEvent.split(IQ_EVENT)[1];
-				console.log(event, el, context);
+	/**
+	 * Evaulate bindings in template strings with the given context.
+	 * @param {Node} node
+	 * @param {Object} context
+	 * @return {Node}
+	 */
+	function _evaluateBindings(node, context) {
+		const iterator = [node];
+		while(iterator.length) {
+			const el = iterator.pop();
+			// If a component is encountered but it isn't the root node, then it's a child IQ component. Skip these and leave them for future cycles.
+			if(_nodeIsComponent(el) && el !== node) {
+				continue;
+			}
 
-				const fn = (e) => {
-					if(e.target !== el) {
-						return;
-					}
+			if(el.nodeType === Node.TEXT_NODE) {
+				const fragment = document.createDocumentFragment();
 
-					const action = ve.props.get(iqEvent);
+				// ¯\_(ツ)_/¯
+				const tempContainer = document.createElement('x-temp');
 
-					// Inject the event as `$iqEvent`. This can then be used in the event handler.
-					context[IQ_EVENT_INJECTION] = e;
+				tempContainer.innerHTML = _saferEvalTemplate(el.textContent, context);
 
-					_saferEval(action, context);
-				};
-
-				if(!el[LISTENERS_SYMBOL].has(event)) {
-					el[LISTENERS_SYMBOL].add(event);
-					el.addEventListener(event, fn);
+				// This needs to be a copy of childNodes otherwise it loses children after the first append. No idea why. This took forever to debug, so... don't change this!
+				for(const child of Array.from(tempContainer.childNodes)) {
+					fragment.appendChild(child);
 				}
-			});
+
+				// Replace the original text node with the new (possibly element) node(s).
+				el.parentNode.replaceChild(fragment, el);
+			} else if(el.nodeType === Node.ELEMENT_NODE) {
+				// Evaluate attributes too.
+				for(const {name, value} of el.attributes) {
+					el.setAttribute(name, _saferEvalTemplate(value, context));
+				}
+			}
+
+			iterator.push(...el.childNodes);
 		}
+
+		return node;
 	}
 
 	/**
-	 * Patch the given root node with the new DOM.
-	 * @param {Object} context The context for parsing and executing IQ events. This should be the component controller.
+	 * Given text, transforms the binding syntax to a template string.
+	 * @param {String} text
+	 * @return {String}
 	 */
-	function _patch(root, newVdom, oldVdom, context = {}, childIndex = 0) {
+	function _templatizeBindings(text) {
+		const regex = new RegExp(BINDING, 'g');
+		return text.replace(regex, '${$1}');
+	}
 
-		console.log(root, newVdom, oldVdom);
-		// if(root.childNodes[childIndex] && root.childNodes[childIndex].nodeType !== Node.TEXT_NODE && root.childNodes[childIndex].tagName.toLowerCase() === CONTAINER_TAG) {//root.childNodes[childIndex].dataset[COMPONENT_DATASET] && root.childNodes[childIndex].dataset[COMPONENT_DATASET] !== context.constructor.name) {
-		// 	return;
+	/**
+	 * Parse binding syntax i.e. {{text}} within the template and change it to ${text}. Templatizes all text within the node because there's no need to let children templatize themselves.
+	 * @param {Node} node
+	 * @param {Object} context The component's controller.
+	 * @return {Node}
+	 */
+	function _parseBindings(node) {
+		const clone = node.cloneNode(true);
+
+		_forAllChildrenOf(clone, (el) => {
+			if(el.nodeType === Node.TEXT_NODE) {
+				el.textContent = _templatizeBindings(el.textContent);
+			} else if(el.nodeType === Node.ELEMENT_NODE) {
+				// Parse attributes bindings too.
+				for(const {name, value} of el.attributes) {
+					el.setAttribute(name, _templatizeBindings(value));
+				}
+			}
+		});
+
+		return _removeEmptyNodes(clone);
+	}
+
+	/**
+	 * If text node, compares inner text content. Otherwise, compares the tag name to determine if a node has changed.
+	 * @param {Node} newDom
+	 * @param {Node} oldDom
+	 * @return {Boolean}
+	 */
+	function _nodeChanged(newDom, oldDom) {
+		//
+		//
+		//
+		//
+		// TODO: OMGGGGGGG!!!!!!!!!!!!!!
+		//
+		//
+		//
+		//
+		// if(newDom.nodeType === Node.TEXT_NODE && oldDom.nodeType === Node.TEXT_NODE) {
+		// 	return newDom.textContent !== oldDom.textContent;
 		// }
-		// debugger;
-		if(!oldVdom) {
-			const appended = root.appendChild(_toElements(newVdom, context));
-			_handleEvents(appended, newVdom, context);
-			return;
-		} else if(!newVdom) {
-			const thing = Array.from(root.childNodes).filter(child => !/^\s+$/.test(child.textContent));
-			root.removeChild(thing[childIndex]);
-			return;
-		} else if(_elementChanged(newVdom, oldVdom)) {
-			const thing = Array.from(root.childNodes).filter(child => !/^\s+$/.test(child.textContent));
-			const newthing = _toElements(newVdom, context);
-			root.replaceChild(
-				newthing,
-				thing[childIndex]
-			);
-			_handleEvents(newthing, newVdom, context);
-			return;
-		// Don't process nested components.
-		} else if(newVdom instanceof VirtualElement) {
-			const newLength = newVdom.children.length;
-			const oldLength = oldVdom.children.length;
-			const thing = Array.from(root.childNodes).filter(child => !/^\s+$/.test(child.textContent));
+
+		// return newDom.tagName !== oldDom.tagName;
+		return newDom.textContent !== oldDom.textContent;
+	}
+
+	/**
+	 * Diffs virtual nodes and actual nodes and patches differences into the DOM.
+	 * @param {Node} node
+	 * @param {Node} newDom
+	 * @param {Node} oldDom
+	 * @param {Number} index
+	 */
+	function _patchHelper(node, newDom, oldDom, index = 0) {
+		if(!oldDom) {
+			node.appendChild(newDom);
+		} else if(!newDom) {
+			node.removeChild(node.childNodes[index]);
+		} else if(_nodeChanged(newDom, oldDom)) {
+			// Clone the newDom because if it's used to replace something, it is removed from itself (resulting in wrong indexing later).
+			node.replaceChild(newDom.cloneNode(true), node.childNodes[index]);
+		} else if(newDom.nodeType === Node.ELEMENT_NODE) {
+			const newLength = newDom.childNodes.length;
+			const oldLength = oldDom.childNodes.length;
 			for(let i=0; i<newLength || i<oldLength; i++) {
-				_patch(
-					thing[childIndex],
-					newVdom.children[i],
-					oldVdom.children[i],
-					context,
+				_patchHelper(
+					node.childNodes[index],
+					newDom.childNodes[i],
+					oldDom.childNodes[i],
 					i
 				);
 			}
-		}
 
-		// Parse the vdom to see if any events are there. This has to happen after the above patching is done, otherwise the node may be replaced by patching.
-		// There was once a bug here by sending in root as the element instead of the child. This caused the entire component to be passed as the element, causing the entire component to have the event listener attached.
-		const thing = Array.from(root.childNodes).filter(child => !/^\s+$/.test(child.textContent));
-		_handleEvents(thing[childIndex], newVdom, context);
-	}
-
-	/**
-	 * Transform a node into VirtualElements.
-	 * @param {Node} node The HTML node to parse.
-	 * @return {VirtualElement}
-	 */
-	function _toVirtualElements(node) {
-		if(node.nodeType === Node.TEXT_NODE) {
-			if(/^\s+$/.test(node.textContent)) {
-				return;
+			// Attributes...
+			for(const {name, value} of newDom.attributes) {
+				node.childNodes[index].setAttribute(name, value);
 			}
-			return new VirtualTextNode(node.textContent);
 		}
-
-		// Transform the node attributes into a Map of attribute to its value.
-		const attrs = new Map(Array.from(node.attributes).map(attr =>
-			[attr.name, attr.value]
-		));
-
-		const el = new VirtualElement(
-			node.nodeName.toLowerCase(),
-			attrs,
-			...Array.from(node.childNodes).map(_toVirtualElements).filter(_defined)
-		);
-
-		return el;
 	}
 
 	/**
-	 * Create real HTML nodes from a VirtualElement.
-	 * @param {VirtualElement}
-	 * @return {Node}
+	 * Loops through child nodes and patches differences.
+	 * @param {Node} node The actual DOM node to patch.
+	 * @param {Node} newDom The vdom after evaluating bindings.
+	 * @param {Node} oldDom The previous vdom.
+	 * @param {Number} index The index of the child node that is currently being used.
 	 */
-	function _toElements(ve, context) {
-		if(ve instanceof VirtualTextNode) {
-			if(/^\s+$/.test(ve.text)) {
-				return;
+	function _patch(context, node, newDom, oldDom) {
+		// Patch everything in (including child IQ components), but only handle events for non-child IQ components.
+		for(let i=0; i<newDom.childNodes.length || i<oldDom.childNodes.length; i++) {
+			_patchHelper(node, newDom.childNodes[i], oldDom.childNodes[i], i);
+
+			// Attributes...
+			for(const {name, value} of newDom.attributes) {
+				node.setAttribute(name, value);
 			}
-			return document.createTextNode(ve.text);
 		}
-
-		const el = document.createElement(ve.tag);
-
-		// Add the attributes back to the element.
-		ve.props.forEach((value, prop) => {
-			el.setAttribute(prop, value);
-		});
-
-		// Append its children.
-		ve.children
-			.map(child => _toElements(child, context))
-			.filter(_defined)
-			.forEach(child => {
-				el.appendChild(child);
-			});
-
-		return el;
 	}
 
 	/**
-	 * Wraps the component root with iq-container. There may be multiple siblings in the root, so the VirtualElements are later wrapped in a single VirtualElement. The actual root is wrapped in a container too, so that its children match up with the VirtualElements when patching later.
-	 * If the component is already wrapped, does nothing.
-	 * @param {Node} root The component root.
+	 * Attach an IQ event to the given node.
+	 * @param {Node} node
+	 * @param {String} name The attribute name.
+	 * @param {String} value The attribute value.
+	 * @param {Object} context
 	 */
-	function _wrapComponentIfNeeded(root) {
-		if(root.parentNode.tagName.toLowerCase() === CONTAINER_TAG) {
+	function _attachEvent(node, name, value, context) {
+		if(name.indexOf(IQ_EVENT) !== 0) {
 			return;
 		}
 
-		// There may be multiple siblings in the root, so the VirtualElements are later wrapped in a single VirtualElement. The actual root is wrapped in a container too, so that its children match up with the VirtualElements when patching later.
-		const container = document.createElement(CONTAINER_TAG);
-		root.parentNode.insertBefore(container, root);
-		container.appendChild(root);
-	}
+		const event = name.split(IQ_EVENT)[1];
 
-	/**
-	 * Parse and execute binding syntax i.e. {{text}} within the template.
-	 * @param {String} html
-	 * @param {Object} context Some context to parse HTML with.
-	 * @return {String} The HTML after executing bindings.
-	 */
-	function _parseBindings(html, context) {
-		const regex = new RegExp(BINDING, 'g');
-
-		// String builder;
-		let sb = '';
-
-		let prevIdx = 0;
-		let match;
-		while((match = regex.exec(html))) {
-			const variable = match[1];
-			sb += html.substring(prevIdx, match.index);
-			sb += `\${${variable}}`;
-			prevIdx = match.index+match[0].length;
+		if(node[LISTENERS_SYMBOL] === undefined) {
+			node[LISTENERS_SYMBOL] = new Map();
+		} else if(node[LISTENERS_SYMBOL].has(event)) {
+			// Update the event in case something weird happens like the node takes the event of a previous node that was removed or something.
+			node[LISTENERS_SYMBOL].set(event, value);
 		}
 
-		// Add the final bits of text to the end.
-		sb += html.substring(prevIdx, html.length);
-		// Woot, we're done! Eval the string within and return it.
-		return _saferEvalTemplate(sb, context);
+		const fn = (e) => {
+			if(e.currentTarget !== node) {
+				return;
+			}
+
+			context[IQ_EVENT_INJECTION] = e;
+
+			const returnValue = _saferEval(
+				node[LISTENERS_SYMBOL].get(event),
+				context
+			);
+
+			delete context[IQ_EVENT_INJECTION];
+			return returnValue;
+		};
+
+		if(!node[LISTENERS_SYMBOL].has(event)) {
+			node[LISTENERS_SYMBOL].set(event, value);
+			node.addEventListener(event, fn, true);
+		}
 	}
 
 	/**
-	 * Update and patch the page with the given HTML.
+	 * Evaulate the `if` directive to determine whether or not to render the given node.
+	 * @param {Node} node
+	 * @param {String} name The attribute name.
+	 * @param {String} value The attribute value.
+	 * @param {Object} context
 	 */
-	function Render(html) {
-		const root = this.componentRoot;
-		_wrapComponentIfNeeded(root);
+	function _attachIf(node, name, value, context) {
+		if(name.indexOf(IQ_IF_DIRECTIVE) !== 0) {
+			return;
+		}
 
-		// Because everything is wrapped, the root node must be the container, which is the wrapper of the root.
-		const newRootNode = root.parentElement;
+		const interpolation = `return !!${value};`;
 
-		// Keep the original template so we can use it later again?
-		this._originalTemplate = html;
+		const result = _saferEval(interpolation, context);
 
-		// Before parsing into HTML, parse and execute the bindings??
-		// It must be called with the component controller as context, because the bindings use the controller.
-		html = _parseBindings(html, this._controller);
+		if(!result) {
+			// I can't believe this worked.
+			node.parentElement.removeChild(node);
+		}
+	}
 
-		const newVdom = _parseStringToHtml(html).map(_toVirtualElements).filter(_defined);
-		const oldVdom = this._currentState || _parseStringToHtml(root.innerHTML).map(_toVirtualElements).filter(_defined);
+	// function _attachFor(node, name, value, context) {
+	// 	if(name.indexOf(IQ_FOR_DIRECTIVE) !== 0) {
+	// 		return;
+	// 	}
 
-		// Wrap the old and new nodes in a container. This is because we may have multiple siblings in the root, but patching algo only works on 1 root node.
-		const newNode = new VirtualElement(undefined, new Map(), ...newVdom);
-		const oldNode = new VirtualElement(undefined, new Map(), ...oldVdom);
+	// 	const parts = value.split(' in ');
+	// 	const iterator = parts[0];
+	// 	const iterable = parts[1];
 
-		// Now we can patch the DOM.
-		_patch(newRootNode, newNode, oldNode, this._controller);
+	// 	if(!iterator || !iterable) {
+	// 		throw new Error(`Error in iterator value "${value}". To loop through an iterable, use \`<el data-iq.for="item in this.items">\``);
+	// 	}
 
-		// Remember to update the current state lol. Otherwise further patches will be against the first render.
-		this._currentState = newVdom;
+	// 	const repeatedNode = node.innerHTML;
+	// 	node.innerHTML = '';
+	// 	console.log(repeatedNode, context);
+
+	// 	const expr = `return ${iterable}
+	// 		.map(${iterator} => '${repeatedNode.replace(/\n/g, "")}')
+	// 		.join('')`;
+
+	// 	node.innerHTML += _saferEval(expr, context);
+	// 	console.log(node.innerHTML);
+	// }
+
+	/**
+	 * Attach IQ events and evaulate directives for the given node.
+	 * @param {Node} node
+	 * @param {Object} context
+	 */
+	function _attachEventsAndDirectives(node, context) {
+		_forAllChildrenOf(node, el => {
+			if(el.nodeType === Node.ELEMENT_NODE &&
+				_findComponentOfNode(el) === context.constructor.name) {
+					for(const {name, value} of el.attributes) {
+						_attachEvent(el, name, value, context);
+						_attachIf(el, name, value, context);
+						// _attachFor(el, name, value, context);
+					}
+			}
+		});
 	}
 
 	/**
-	 * Notifies that the component should update the UI in response to changes.
-	 * @param {Boolean} _changeDetectedByFramework By default, the change was not detected by the framework. The user had to manually call ComponentShouldChange, meaning that the framework did not know how to handle that specific case of changes.
-	 * In the case of proxied getter/setters, this means the variable was mutated without getting or setting, such as pushing to an array instead of reassigning to a concat'd one.
+	 * Parse the bindings of a component while skipping child IQ components embedded inside. Patches the real DOM with the differences after evaluation.
+	 * This is called whenever change is detected within a component. Because rendering may trigger child IQ components to be created, Load is called at the end to dynamically resolve children.
+	 */
+	function Render() {
+		const evaluatedDom =
+			// Parse bindings again in case children come out with bindings.
+			_parseBindings(
+				_evaluateBindings(
+					this._templatizedTemplate.cloneNode(true),
+					this._controller
+				)
+			);
+
+		const previousVdom = this._componentRoot;
+		const newestVdom = evaluatedDom;
+
+		// TODO: Let's patch after all HTML is final, e.g. all components are resolved and their HTML is evaluated. Then we only need to patch once on each change cycle.
+		_patch(this._controller, this._componentRoot, newestVdom, previousVdom);
+
+		_attachEventsAndDirectives(this._componentRoot, this._controller);
+
+		// Just unresolve the child components (not all components) and it doesn't do an infinite loop.
+		this._componentRoot.querySelectorAll(`[data-${COMPONENT}]`).forEach(component => {
+			component[COMPONENT_RESOLVED_SYMBOL] = false;
+		});
+
+		Load(this._componentRoot);
+	}
+
+	/**
+	 * Called as a result of change being detected in a component. This calls Render on the component's vdom.
+	 * @param {Boolean} _changeDetectedByFramework By default, callers specify that they manually triggered change detection to re-render components. In these cases, the framework cannot observe changes to those objects on the controller. Some MUTATORS are supported, but nested things are trickier. If calling this is necessary in the consumer's code, a warning is logged to the console.
 	 */
 	function ComponentShouldChange(_changeDetectedByFramework = false) {
 		if(!_changeDetectedByFramework) {
-			console.warn('Automatic change detection is triggered by reassigning a value - such as concatenating instead of pushing to an array. Some mutating methods are allowed in this framework (see MUTATORS). Use of vdom.ComponentShouldChange() is allowed, but discouraged.');
+			console.warn('Automatic change detection is triggered by reassigning a value - such as concatenating instead of pushing to an array. Some mutating methods are supported in this framework (see MUTATORS). Use of view.ComponentShouldChange() is allowed, but discouraged.');
 		}
 
-		this.Render(this._originalTemplate);
+		this.Render();
 	}
 
 	function Vdom(componentRoot) {
@@ -657,34 +566,41 @@ iqwerty.vdom = (() => {
 		this._controller;
 
 		/**
-		 * The current state of the DOM, as VirtualElements.
-		 * @type {VirtualElement[]}
-		 */
-		this._currentState;
-
-		/**
-		 * The original template of the component.
-		 * @type {String}
-		 */
-		this._originalTemplate;
-
-		/**
 		 * The HTML element of the component root.
 		 * @type {Node}
 		 */
-		this.componentRoot = componentRoot;
+		Object.defineProperty(this, '_componentRoot', {
+			value: _removeEmptyNodes(componentRoot),
+			writable: false,
+		});
+
+		/**
+		 * The template after converting bindings into the template string syntax. This is cached so future Renders are less expensive (since they happen on each change detection cycle).
+		 * @type {String}
+		 */
+		Object.defineProperty(this, '_templatizedTemplate', {
+			value: _parseBindings(componentRoot),
+			writable: false,
+		});
 	}
 
 	Vdom.prototype = {
+		ComponentShouldChange,
 		Render,
-		ComponentShouldChange
 	};
 
 	/**
-	 * Resolves a component by initializing and creating a virtual DOM for it.
+	 * Instantiates the component controller and initializes change detection on the controller.
 	 * @param {Node} componentElement
 	 */
-	function _resolveComponent(componentElement) {
+	function _resolveComponentIfNeeded(componentElement) {
+		if(componentElement[COMPONENT_RESOLVED_SYMBOL]) {
+			return;
+		}
+
+		// The component must be resolved before calling Render, because Render may trigger additional Load calls, which will result in the component never being resolved. Lmao.
+		componentElement[COMPONENT_RESOLVED_SYMBOL] = true;
+
 		// Find the controller for the component.
 		const controller = window[componentElement.dataset[COMPONENT_DATASET]];
 
@@ -696,78 +612,61 @@ iqwerty.vdom = (() => {
 		// Create a new virtual DOM for the component.
 		const vdom = new Vdom(componentElement);
 
+		// Inject IQ custom event handler and dispatcher for consumers to easily emit events. Custom events are emitted and handled synchronously.
+		// https://stackoverflow.com/questions/15277800
+		const iqEventHandler = {
+			dispatch: (event, detail) => {
+				const _event = new CustomEvent(event, {detail});
+				componentElement.dispatchEvent(_event);
+			},
 
+			handle: (handler) => (iqEvent, ...args) => {
+				if(iqEvent === undefined) {
+					return console.error(`Event not found.
 
-		// TODO: Patch asynchronous events to re-render, or just do the old observe thing?
+1. Did you inject $iqEvent in your template?
+2. $iqEvent must be the first argument in your handler.
 
+e.g.
+<el data:iq-click="this.clickHandler($iqEvent, this.otherParam)" />`);
+				}
 
+				return handler(iqEvent.detail, ...args);
+			},
+		};
 
-		// TODO: Initialize controller here or after initial Render()?
-		/**
-		 * The component controller. Can inject the following dependencies.
-		 * @param {Object} appState The global application state. See APPLICATION_STATE.
-		 * @param {Node} host The host element of the component. This is the component that defines [data-iq-component].
-		 * @param {Vdom} view The virtual DOM associated with the component. This is useful for manually re-rendering the view when the framework fails to detect changes.
-		 */
+		// Instantiate the component controller and inject deps.
 		vdom._controller = new controller({
-			appState: APPLICATION_STATE,
 			host: componentElement,
 			view: vdom,
+			event: iqEventHandler,
 		});
 
-		const _bindings = {};
-		_observe(vdom._controller, _bindings, () => {
-			// Framework detected changes should cause the component to re-render.
+		_observe(vdom._controller, {}, () => {
 			vdom.ComponentShouldChange(true);
 		});
 
-		// Call Render() for the consumer once using whatever's in the template already. There should be no need for them to manually call Render() again since data binding will take over.
-		let renderWith = componentElement.innerHTML;
-
-		// Allow arrow functions, less than, and greater than in the template...
-		renderWith = renderWith
-			.replace(/&lt;/g, '<')
-			.replace(/&gt;/g, '>')
-			.replace(/&amp;/g, '&');
-
-		// TODO: This was originally here and the use case is now unknown. Later removed because child components lose their references when parent innerHTML is overwritten.
-		// // Reset the content so IQ can handle rendering.
-		// componentElement.innerHTML = '';
-
-		vdom.Render(renderWith);
-
-		// Add self to the global register so global state changes can re-render all components.
-		GLOBAL_COMPONENT_REGISTER.add(vdom);
-
-		// Mark the component as resolved.
-		componentElement[COMPONENT_RESOLVED_SYMBOL] = true;
+		vdom.Render();
 	}
 
 	/**
-	 * Load an IQ component (and any child components it may have).
-	 * @param {Node} element The host element to load.
+	 * Traverses the DOM and looks for IQ components to resolve. This is an exported function used to dynamically render IQ components as they are inserted in the DOM.
+	 * Note that NodeIterator or TreeWalker are not used because of performance issues. See https://stackoverflow.com/questions/7941288/when-to-use-nodeiterator.
+	 * @param {Node} element
 	 */
 	function Load(element) {
-		// Queue up child components to resolve.
-		const components = Array
-			.from(element.querySelectorAll(`[data-${COMPONENT}]`));
+		const components = Array.from(element.querySelectorAll(`[data-${COMPONENT}]`));
 
-		// Queue the current target if it is an IQ component.
-		if(element.dataset && element.dataset[COMPONENT_DATASET]) {
+		if(_nodeIsComponent(element)) {
 			components.unshift(element);
 		}
 
-		components
-			// Only handle unresolved components.
-			.filter(el => !el[COMPONENT_RESOLVED_SYMBOL])
-			// Reverse the selector so child components can be done first. Lol. This is definitely not the best way to do this but whatevs.
-			// .reverse()
-			.forEach(el => {
-				_resolveComponent(el);
-			});
+		components.forEach(component => {
+			_resolveComponentIfNeeded(component);
+		});
 	}
 
 	return {
-		Load
+		Load,
 	};
 })();
