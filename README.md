@@ -10,6 +10,8 @@ Cool points:
 * Lots of bugs
 * No IE support :(
 
+A demo is available on my [playground](https://www.michaelcheng.us/playground/lib-js/dom/).
+
 ## Usage
 This framework uses "components" to get its work done. There is some magic in creating a component.
 
@@ -370,6 +372,8 @@ And just put it onto your page with:
     </body>
 </html>
 ```
+
+You can see some version of this on my [playground](https://www.michaelcheng.us/playground/lib-js/dom/todo/)
 
 ## Gotchas
 * The components are `eval`uated with a (slight) attempt at securing the context.
