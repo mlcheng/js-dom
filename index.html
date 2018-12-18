@@ -15,17 +15,19 @@
 	<script src="vdom.js"></script>
 </head>
 <body>
-	<div data-iq-component="ToDoApp" class="{{this.klass}}">
-		<ul data-iq:deleteitem="this.deleteItem($iqEvent)">
+	<div data-iq-component="ToDoApp" class="{{this.klass}}" data-iq:deleteitem="this.deleteItem($iqEvent)">
+		<ul>
 			{{this.renderItems()}}
 		</ul>
-<!-- 		<ul>
+
+		<!-- <ul>
 			<iq-container data-iq.for="item in this.items">
-				<li data-iq-component="ToDoItem">
-					{{this.item}} {{this.check}}
+				<li data-iq-component="ToDoItem" data-iq:click="this.delete('${item}')">
+					${item} {{this.check}}
 				</li>
 			</iq-container>
 		</ul> -->
+
 		<ul>
 			<li data-iq-component="ToDoItem">asd {{this.check}}</li>
 			<li data-iq-component="ToDoItem">asd {{this.check}}</li>
@@ -111,13 +113,13 @@
 			this.items.push('hello');
 		}, 1000);
 
-		// setTimeout(() => {
-		// 	this.items.push('bye');
-		// }, 1500);
+		setTimeout(() => {
+			this.items.push('bye');
+		}, 1500);
 
-		// setTimeout(() => {
-		// 	this.items.splice(1, 1);
-		// }, 2000);
+		setTimeout(() => {
+			this.items.splice(1, 1);
+		}, 2000);
 
 		this.handleKeypress = (e) => {
 			this.klass = e.target.value;

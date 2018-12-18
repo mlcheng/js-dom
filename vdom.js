@@ -36,10 +36,12 @@ iqwerty.vdom = (() => {
 	const COMPONENT_DATASET = 'iqComponent';
 	const BINDING = '\{\{(.*?)\}\}';
 
+	const IQ_CONTAINER = 'iq-container';
+
 	const IQ_EVENT = 'data-iq:';
 	const IQ_DIRECTIVE = 'data-iq.';
 	const IQ_IF_DIRECTIVE = `${IQ_DIRECTIVE}if`;
-	// const IQ_FOR_DIRECTIVE = `${IQ_DIRECTIVE}for`;
+	const IQ_FOR_DIRECTIVE = `${IQ_DIRECTIVE}for`;
 	const IQ_EVENT_INJECTION = '$iqEvent';
 
 	/**
@@ -317,42 +319,36 @@ iqwerty.vdom = (() => {
 	function _parseBindings(node) {
 		const clone = node.cloneNode(true);
 
-		_forAllChildrenOf(clone, (el) => {
+		// _forAllChildrenOf(clone, (el) => {
+		// 	if(el.nodeType === Node.TEXT_NODE) {
+		// 		el.textContent = _templatizeBindings(el.textContent);
+		// 	} else if(el.nodeType === Node.ELEMENT_NODE && el.tagName.toLowerCase() !== IQ_CONTAINER) {
+		// 		// Parse attributes bindings too.
+		// 		for(const {name, value} of el.attributes) {
+		// 			el.setAttribute(name, _templatizeBindings(value));
+		// 		}
+		// 	}
+		// });
+
+		const iterator = [clone];
+		while(iterator.length) {
+			const el = iterator.pop();
+
 			if(el.nodeType === Node.TEXT_NODE) {
 				el.textContent = _templatizeBindings(el.textContent);
+			} else if(el.nodeType === Node.ELEMENT_NODE && el.tagName.toLowerCase() === IQ_CONTAINER) {
+				continue;
 			} else if(el.nodeType === Node.ELEMENT_NODE) {
 				// Parse attributes bindings too.
 				for(const {name, value} of el.attributes) {
 					el.setAttribute(name, _templatizeBindings(value));
 				}
 			}
-		});
+
+			iterator.push(...el.childNodes);
+		}
 
 		return _removeEmptyNodes(clone);
-	}
-
-	/**
-	 * If text node, compares inner text content. Otherwise, compares the tag name to determine if a node has changed.
-	 * @param {Node} newDom
-	 * @param {Node} oldDom
-	 * @return {Boolean}
-	 */
-	function _nodeChanged(newDom, oldDom) {
-		//
-		//
-		//
-		//
-		// TODO: OMGGGGGGG!!!!!!!!!!!!!!
-		//
-		//
-		//
-		//
-		// if(newDom.nodeType === Node.TEXT_NODE && oldDom.nodeType === Node.TEXT_NODE) {
-		// 	return newDom.textContent !== oldDom.textContent;
-		// }
-
-		// return newDom.tagName !== oldDom.tagName;
-		return newDom.textContent !== oldDom.textContent;
 	}
 
 	/**
@@ -367,7 +363,7 @@ iqwerty.vdom = (() => {
 			node.appendChild(newDom);
 		} else if(!newDom) {
 			node.removeChild(node.childNodes[index]);
-		} else if(_nodeChanged(newDom, oldDom)) {
+		} else if(!newDom.isEqualNode(oldDom)) {
 			// Clone the newDom because if it's used to replace something, it is removed from itself (resulting in wrong indexing later).
 			node.replaceChild(newDom.cloneNode(true), node.childNodes[index]);
 		} else if(newDom.nodeType === Node.ELEMENT_NODE) {
@@ -394,9 +390,8 @@ iqwerty.vdom = (() => {
 	 * @param {Node} node The actual DOM node to patch.
 	 * @param {Node} newDom The vdom after evaluating bindings.
 	 * @param {Node} oldDom The previous vdom.
-	 * @param {Number} index The index of the child node that is currently being used.
 	 */
-	function _patch(context, node, newDom, oldDom) {
+	function _patch(node, newDom, oldDom) {
 		// Patch everything in (including child IQ components), but only handle events for non-child IQ components.
 		for(let i=0; i<newDom.childNodes.length || i<oldDom.childNodes.length; i++) {
 			_patchHelper(node, newDom.childNodes[i], oldDom.childNodes[i], i);
@@ -516,16 +511,64 @@ iqwerty.vdom = (() => {
 		});
 	}
 
+	function ___for(node, context) {
+		_forAllChildrenOf(node, (el) => {
+			if(el.nodeType === Node.ELEMENT_NODE &&
+				_findComponentOfNode(el) === context.constructor.name) {
+					for(const {name, value} of el.attributes) {
+						if(name.indexOf(IQ_FOR_DIRECTIVE) === 0) {
+
+							if(!el._lolol) {
+								el._lolol = el.innerHTML;
+							}
+
+							const parts = value.split(' in ');
+							const iterator = parts[0];
+							const iterable = parts[1];
+
+							if(!iterator || !iterable) {
+								throw new Error(`Error in iterator value "${value}". To loop through an iterable, use \`<el data-iq.for="item in this.items">\``);
+							}
+
+							const repeatedNode = el._lolol;
+							el.innerHTML = '';
+							// console.log(repeatedNode, context);
+
+							const expr = `return ${iterable}
+								.map(${iterator} => \`${repeatedNode}\`)
+								.join('')`;
+								console.log(expr)
+
+							el.innerHTML = _saferEval(expr, context);
+
+
+							// console.log(el.childNodes);
+							// const fragment = document.createElement('x-temp-lol');
+							// fragment.innerHTML = _saferEval(expr, context);
+							// const empty = document.createElement('x-temp-lol');
+
+							// console.log(el, fragment);
+							// _patch(el, fragment, el);
+						}
+					}
+				}
+		});
+	}
+
 	/**
 	 * Parse the bindings of a component while skipping child IQ components embedded inside. Patches the real DOM with the differences after evaluation.
 	 * This is called whenever change is detected within a component. Because rendering may trigger child IQ components to be created, Load is called at the end to dynamically resolve children.
 	 */
 	function Render() {
+		// _runDirectives(this._templatizedComponent)
+		// debugger;
+		___for(this._templatizedComponent, this._controller);
+
 		const evaluatedDom =
 			// Parse bindings again in case children come out with bindings.
 			_parseBindings(
 				_evaluateBindings(
-					this._templatizedTemplate.cloneNode(true),
+					this._templatizedComponent.cloneNode(true),
 					this._controller
 				)
 			);
@@ -534,7 +577,7 @@ iqwerty.vdom = (() => {
 		const newestVdom = evaluatedDom;
 
 		// TODO: Let's patch after all HTML is final, e.g. all components are resolved and their HTML is evaluated. Then we only need to patch once on each change cycle.
-		_patch(this._controller, this._componentRoot, newestVdom, previousVdom);
+		_patch(this._componentRoot, newestVdom, previousVdom);
 
 		_attachEventsAndDirectives(this._componentRoot, this._controller);
 
@@ -575,10 +618,10 @@ iqwerty.vdom = (() => {
 		});
 
 		/**
-		 * The template after converting bindings into the template string syntax. This is cached so future Renders are less expensive (since they happen on each change detection cycle).
-		 * @type {String}
+		 * The templatized component after converting bindings into the template string syntax. This is cached so future Renders are less expensive (since they happen on each change detection cycle).
+		 * @type {Node}
 		 */
-		Object.defineProperty(this, '_templatizedTemplate', {
+		Object.defineProperty(this, '_templatizedComponent', {
 			value: _parseBindings(componentRoot),
 			writable: false,
 		});
