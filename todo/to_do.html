@@ -1,0 +1,23 @@
+<div data-iq.if="!items.length">
+	Nothing here yet. Why don't you add something below?
+</div>
+
+<ul data-iq.if="items.length">
+	<li
+		data-iq.for="item of items"
+		data-iq:click="edit(item, $iqEvent)"
+		class="{{item.complete ? 'strike' : ''}}">
+			<input
+				type="checkbox"
+				data-iq:click="toggleComplete(item, $iqEvent)">
+			<input
+				type="text"
+				value="{{item.label}}"
+				data-iq.if="item.edit"
+				data-iq:blur="doneEditing(item, $iqEvent)">
+			<span data-iq.if="!item.edit">{{item.label}}</span>
+	</li>
+</ul>
+
+<input type="text" class="todo" placeholder="to do">
+<button data-iq:click="add()">add</button>

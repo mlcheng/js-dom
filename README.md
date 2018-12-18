@@ -1,141 +1,129 @@
-# js-vdom
+# js-dom
 
-A lightweight framework for data binding that uses a virtual DOM inside. Perfect for web apps!
+A lightweight templating framework with DOM diffing. Perfect for web apps (maybe)!
+
+Cool points:
+
+* Zero dependencies!
+* Incrementally patches changes onto the DOM
+* Works how you want it to (hopefully)
+* Lots of bugs
+* No IE support :(
 
 ## Usage
-This framework uses the concept of "components" to get its work done. A component is specified using the `data-iq-component` attribute.
+This framework uses "components" to get its work done. There is some magic in creating a component.
+
+First, the component tag **must** be in `snake-case`. Any tag without dashes will be ignored, since they may be native HTML elements.
 
 ```html
-<div data-iq-component="TimerComponent"></div>
+<timer-component></timer-component>
 ```
 
-Somewhere in your page, a `TimerComponent` controller must exist.
+Somewhere in your page, a `TimerComponent` controller must exist, and it must extend `Component`. Remember to call `super()`. The mapping from `<timer-component>` to `TimerComponent` is magic (well... it's just `snake-case` to `PascalCase`), and you don't have to explicitly bind this.
 
 ```js
-function TimerComponent() {
-	this.time = {
-		seconds = 0,
-	};
+class TimerComponent extends Component {
+    constructor() {
+        super();
 
-	setInterval(() => {
-		this.time.seconds++;
-	}, 1000);
+        this.time = {
+            seconds: 0
+        };
+
+        this.start();
+    }
+
+    start() {
+        setInterval(() => {
+            this.time.seconds++;
+        }, 1000);
+    }
 }
 ```
 
-Data binding is achieved using brackets in the template.
+Data binding is achieved using brackets in the template, and the template should be provided in the `$iq` property of `Component`.
 
-```html
-<div data-iq-component="TimerComponent">
-	{{this.time.seconds}} seconds have passed!.
-</div>
+```js
+constructor() {
+    super();
+
+    this.$iq.template = '{{time.seconds}} seconds have passed'.
+}
 ```
+
+You can use whatever you need get the template.
+
+```js
+constructor() {
+    super();
+
+    this.$iq.template = fs.readFileSync('path/to/template.html', 'utf8');
+}
+```
+
+Retrieving templates dynamically should work too.
+
+```js
+constructor() {
+    super();
+
+    iqwerty.template.GetTemplate('path/to/template.html', template => {
+        this.$iq.template = template;
+    });
+}
+```
+
+The framework provides an easy way to load templates dynamically. This is described below in the utility injection section below.
+
+For simplicity and ease of understanding, in the rest of the document we will assume that the template is already set without manually declaring it in the JavaScript.
 
 ## Advanced usage
 The framework also includes many other powerful features that you probably didn't know about!
 
-### Component injection
+### Utility injection
 The component controller has a few dependencies that can be injected by the framework.
 
-#### Global application state
-The component controller can inject a global application state managed by the framework.
+#### Detector
+The `detector` reveals a single method: `ComponentShouldChange()`. Use this when the view should be updated based on state changes, but it failed to work automagically.
 
 ```js
-function TimerComponent({appState: state}) {}
-```
+constructor({detector}) {
+    this.time = new Map();
+    this.time.set('something', {
+        seconds: 0
+    });
 
-The application state has the following methods:
-
-##### `.all()`
-Returns all entries in the global state.
-
-##### `.create(key, value)`
-Creates an entry in the global state with the given key and value.
-
-##### `.update(key, value)`
-Updates an entry in the global state. The global state may only be mutated through this method. Internally, this method causes the view to re-render.
-
-##### `.get(key)`
-Retrieves a value from the global state.
-
-Here's a quick example of how the global app state can be used.
-
-```js
-function AppComponent({appState}) {
-	appState.create('user', undefined);
-}
-
-function LoginComponent({appState}) {
-	appState.update('user', 'michael');
-}
-```
-
-Note that this is all experimental and may not make any sense yet ಠ_ಠ
-
-#### Component host
-The component controller can inject the component host as a native DOM element, i.e. the element containing the `data-iq-component`.
-
-```js
-function TimerComponent({host: cmp}) {}
-```
-
-#### Virtual DOM
-The component controller can inject the virtual DOM. This reveals a single method: `ComponentShouldChange()`. Use this when the view should be updated based on state changes, but it failed to work.
-
-```js
-function TimerComponent({view: vdom}) {
-	this.time = new Map();
-	this.time.set('something', {
-		seconds: 0
-	});
-
-	setTimeout(() => {
-		this.time.get('something').seconds++;
-		vdom.ComponentShouldChange();
-	}, 1000);
+    setTimeout(() => {
+        this.time.get('something').seconds++;
+        detector.ComponentShouldChange();
+    }, 1000);
 }
 ```
 
 *In case you're curious, this framework works by observing enumerable properties of an object. Sometimes, weird things like nested `Map`s don't get observed well. Changes to those nested values may not propagate correctly to the framework.*
 
-#### Events
-The framework provides an easy way to emit and handle custom events.
+#### Component element
+The component controller can inject the component element itself as a native DOM element.
 
 ```js
-function CustomEventEmitterApp({event: customEvent}) {}
+constructor({elementRef}) {}
 ```
 
-##### `.dispatch(eventName, details)`
-Dispatch a custom event. You can pass additional information around using the second parameter. **Note that custom events are dispatched by the component host rather than the calling element.**
-
-##### `.handle(callback)`
-Handle a custom event. The callback takes in the event details as the first parameter if desired.
-
-```html
-<div
-	data-iq-component="CustomEventHandlerApp"
-	data-iq:customnumber="this.onCustomNumber($iqEvent)">
-		<div data-iq-component="CustomEventEmitterApp">
-			<button data-iq:click="this.emit(42)">Emit!</button>
-		</div>
-
-		<p>The number is: {{this.customNumber}}</p>
-</div>
-```
+#### Dynamic template loader
+Uses `fetch` to dynamically load a component template.
 
 ```js
-function CustomEventHandlerApp({event: customEvent}) {
-	this.customNumber = undefined;
-
-	this.onCustomNumber = customEvent.handle((number) => {
-		this.customNumber = number;
-	});
+constructor({loadTemplate}) {
+    loadTemplate('path/to/template.html').for(this);
 }
+```
 
-function CustomEventEmitterApp({event: customEvent}) {
-	this.emit = (number) => {
-		customEvent.dispatch('customnumber', number);
-	};
+This utility abstracts away the assignment of the template to `this.$iq.template`. In the future, the template should be a `Promise`, that way it's much more explicit and there's less magic (which is good for readability):
+
+```js
+constructor({loadTemplate}) {
+    // THIS IS NOT SUPPORTED YET!
+    this.$iq.template = loadTemplate('path/to/template.html');
 }
 ```
 
@@ -143,133 +131,244 @@ function CustomEventEmitterApp({event: customEvent}) {
 Events handled by the framework are known as `IQ Events`. You can specify these by the syntax `data-iq:event`, where `event` is any HTML event.
 
 ```html
-<div data-iq-component="TimerComponent">
-	{{this.time.seconds}} seconds have passed!.
-	<button data-iq:click="this.reset()">reset</button>
-</div>
+<p>{{this.time.seconds}} seconds have passed!</p>
+<button data-iq:click="reset()">Reset timer</button>
 ```
 
 ```js
-function TimerComponent() {
-	this.time = {
-		seconds = 0,
-	};
+class TimerComponent extends Component {
+    constructor() {
+        super();
 
-	this.reset = () => {
-		this.time.seconds = 0;
-	};
+        this.time = {
+            seconds: 0
+        };
 
-	setInterval(() => {
-		this.time.seconds++;
-	}, 1000);
+        this.start();
+    }
+
+    start() {
+        setInterval(() => {
+            this.time.seconds++;
+        }, 1000);
+    }
+
+    reset() {
+        this.time.seconds = 0;
+    }
 }
 ```
 
-Unlike my [previous data binding library](https://github.com/mlcheng/js-binding), this framework uses a uni-directional data flow because that's the cool thing these days right? (Well, it's actually easier to reason about because the state only goes in one direction). To create two way binding, update events must be triggered.
+If you need to get the actual `Event` that fired, inject the magic variable `$iqEvent` in your template.
 
 ```html
-<div data-iq-component="TwoWayBindingComponent">
-	<input type="text" data-iq:input="this.updateState($iqEvent)">
-	<span>The text is: {{this.text}}</span>
-</div>
+<input type="text" data-iq:click="selectText($iqEvent)">
 ```
-
-You may have noticed the `$iqEvent` variable. This is a special magic variable used to pass the `input` event to the handler.
 
 ```js
-function TwoWayBindingComponent({host}) {
-	this.text = 'Hi!';
-	this.updateState = (event) => {
-		this.text = event.target.value;
-	};
-
-	// Start out with `Hi!` as the text.
-	host.querySelector('input').value = this.text;
+selectText(event) {
+    event.currentTarget.select();
 }
 ```
+
+This could just be simplified to:
+
+```js
+<input type="text" data-iq:click="$iqEvent.currentTarget.select()">
+```
+
+...if you know what's going on behind the scenes.
 
 ### Directives
 This framework supports some directives (similar to Angular) that make it easier to manipulate your DOM.
 
 #### `.if`
-Optionally render a node based on a given boolean value. If false, the node will not be in the DOM.
+Optionally render a node based on a given boolean value. If false, the node will not appear in the DOM.
+
+*Actually, for performance reasons and ease of diffing, the node will __not__ be in the DOM, but it will be replaced by an HTML comment. See the source for details.*
 
 ```html
-<div data-iq-component="ProfilePictureComponent">
-	<img data-iq.if="this.isLoggedIn" src="/path/to/image.jpg">
-	<a data-iq.if="!this.isLoggedIn" href="/login">Login</a>
+<div>
+    <img data-iq.if="this.isLoggedIn" src="/path/to/profile_picture.jpg">
+    <a data-iq.if="!this.isLoggedIn" href="/login">Login</a>
 </div>
 ```
 
 ```js
-function ProfilePictureComponent() {
-	this.isLoggedIn = false;
+class ProfilePictureComponent extends Component {
+    constructor() {
+        super();
 
-	fetch('/api/login').then(() => {
-		this.isLoggedIn = true;
-	}).catch(() => {
-		this.isLoggedIn = false;
-	})
+        this.isLoggedIn = false;
+        this.login();
+    }
+
+    login() {
+        fetch('/api/login').then(() => {
+            this.isLoggedIn = true;
+        }).catch(() => {
+            this.isLoggedIn = false;
+        });
+    }
 }
 ```
 
 #### `.for`
-This doesn't work yet. Hold on :')
+Render a list of elements.
+
+```html
+<ul>
+    <li data-iq.for="item of items">{{item}}</li>
+</ul>
+```
+
+```js
+class ItemComponent extends Component {
+    constructor() {
+        super();
+
+        this.items = [1, 2, 3];
+    }
+}
+```
+
+The expression is "safely" evaluated using a prepended `const`, so the expression `item of items` is actually evaluated as:
+
+```js
+for(const item of items) {}
+```
+
+ಠ_ಠ
+
+### Inputs
+Components can receive arbitrary data as inputs. The syntax is the same as directives, meaning you cannot have an input that has the same name as a directive. It just **won't** work.
+
+This is fairly similar to Angular, but it's not as good (obviously). Let's re-write the `ItemComponent` using inputs.
+
+```js
+class AppComponent extends Component {
+    constructor() {
+        super();
+
+        this.items = [1, 2, 3];
+        this.$iq.template = `
+            <item-component data-iq.items="items"></item-component>
+        `;
+    }
+}
+
+class ItemComponent extends Component {
+    constructor() {
+        super();
+
+        this.$iq.template = `
+            <ul>
+                <li data-iq.for="item of items">{{item}}</li>
+            </ul>
+        `;
+
+        // You don't have to write this annotation, but it's probably good practice for you to understand what's actually going on. I'm planning on making a wrapper for this that automatically puts the input onto the class context.
+        /** @input */
+        this.items;
+    }
+}
+```
 
 ### Dynamically loading components
+**TODO: Check if this is still right.**
+
 If you're lazy loading things (and you should), this framework exposes only one method, and it's to help render a lazy-loaded component. `iqwerty.vdom.Load()` takes in a reference to an HTML element and instantiates it.
 
 ```js
 iqwerty.vdom.Load(document.getElementById('lazy-loaded-section'));
 ```
 
-## The todo app
-Every JavaScript framework needs a [todo app](http://todomvc.com/). Here is ours.
+## The To-Do app
+Every JavaScript framework needs a [To-Do app](http://todomvc.com/) to show how awesome it is. Here is ours. Read carefully -- this is also the gold-standard on how to create web apps using our framework.
 
 ```html
-<div data-iq-component="ToDoApp" data-iq:deleteitem="this.delete($iqEvent)">
-	<ul>
-		{{this.renderItems()}}
-	</ul>
+<ul>
+    <li
+        data-iq.for="item of items"
+        data-iq:click="edit(item, $iqEvent)"
+        class="{{item.complete ? 'strike' : ''}}">
+            <input
+                type="text"
+                value="{{item.label}}"
+                data-iq.if="item.edit"
+                data-iq:blur="doneEditing(item, $iqEvent)">
+            <span data-iq.if="!item.edit">{{item.label}}</span>
+            <input
+                type="checkbox"
+                data-iq:click="toggleComplete(item, $iqEvent)">
+    </li>
+</ul>
 
-	<input type="text" data-iq:focus="this.focus($iqEvent)">
-	<button data-iq:click="this.add()">Add!</button>
-</div>
+<input type="text" class="todo">
+<button data-iq:click="add()">add</button>
 ```
 
 ```js
-function ToDoApp({host, event}) {
-	this.items = [];
+class ToDoApp extends Component {
+    constructor({loadTemplate, elementRef}) {
+        super();
+        loadTemplate('to_do_app.html').for(this);
 
-	this.renderItems = () => this.items.map((item, index) => `
-		<li
-			data-iq-component="ToDoItem"
-			data-iq:click="this.deleteItem(${index})">
-				${item}
-		</li>
-	`).join('');
+        this.elementRef = elementRef;
+        /**
+         * @type {Array<{
+         *       label: string;
+         *       edit: boolean;
+         *       complete: boolean;
+         * }>}
+         */
+        this.items = [];
+    }
 
-	this.focus = (e) => {
-		e.target.select();
-	};
+    add() {
+        const input = this.elementRef.querySelector('input.todo');
+        this.items.push({
+            label: input.value,
+            edit: false,
+            complete: false
+        });
+        input.value = '';
+        input.focus();
+    }
 
-	this.add = () => {
-		const input = host.querySelector('input');
-		this.items.push(input.value);
-		input.value = '';
-		input.focus();
-	};
+    edit(item, event) {
+        item.edit = true;
+        const host = event.currentTarget;
+        host.querySelector('input[type=text]').select();
+    }
 
-	this.delete = event.handle((index) => {
-		this.items.splice(index, 1);
-	});
+    doneEditing(item, event) {
+        const host = event.currentTarget;
+        item.label = host.value;
+        item.edit = false;
+    }
+
+    toggleComplete(item, event) {
+        item.complete = !item.complete;
+        event.stopPropagation();
+    }
 }
+```
 
-function ToDoItem({event}) {
-	this.deleteItem = (index) => {
-		event.dispatch('deleteitem', index);
-	};
-}
+And just put it onto your page with:
+
+```html
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>To-Do</title>
+        <script src="dom.js"></script>
+    </head>
+    <body>
+        <to-do-app></to-do-app>
+    </body>
+</html>
 ```
 
 ## Gotchas
