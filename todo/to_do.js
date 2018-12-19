@@ -3,7 +3,7 @@
 'use strict';
 
 class ToDoApp extends Component {
-	constructor({loadTemplate, elementRef}) {
+	constructor({ loadTemplate, elementRef }) {
 		super();
 		loadTemplate('to_do.html').for(this);
 
@@ -20,13 +20,12 @@ class ToDoApp extends Component {
 
 	add() {
 		const input = this.elementRef.querySelector('input.todo');
-		this.items.push({label: input.value, edit: false, complete: false});
+		this.items.push({ label: input.value, edit: false, complete: false });
 		input.value = '';
 		input.focus();
 	}
 
 	edit(item, event) {
-		console.warn('maybe edit');
 		item.edit = true;
 		const host = event.currentTarget;
 		host.querySelector('input[type=text]').select();
