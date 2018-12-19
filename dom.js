@@ -496,7 +496,7 @@ iqwerty.dom = (() => {
 				_prepareDirectives(node, context);
 				_prepareEvents(node, context);
 
-				for(const {name, value} of node.attributes) {
+				for(const { name, value } of node.attributes) {
 					if(name.indexOf(IQ_DIRECTIVE) !== -1) continue;
 					const newValue = _saferEvalTemplate(value, context);
 					if(node.getAttribute(name) === newValue) continue;
@@ -550,7 +550,7 @@ iqwerty.dom = (() => {
 				console.log('checking children');
 				_patch(finalList[i], newList[i]);
 
-				for(const {name, value} of newList[i].attributes) {
+				for(const { name, value } of newList[i].attributes) {
 					// Michael, don't `return` here. Otherwise you'll skip all the rest of the patches... lol.
 					if(name.indexOf(IQ_DIRECTIVE) !== -1) continue;
 					if(finalList[i].getAttribute(name) === value) continue;
@@ -657,3 +657,11 @@ iqwerty.dom = (() => {
 		Load
 	};
 })();
+
+if(typeof module !== 'undefined') {
+	/* global module */
+	module.exports = {
+		Component,
+		dom: iqwerty.dom
+	};
+}
