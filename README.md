@@ -89,7 +89,7 @@ The component controller has a few dependencies that can be injected by the fram
 The `detector` reveals a single method: `ComponentShouldChange()`. Use this when the view should be updated based on state changes, but it failed to work automagically.
 
 ```js
-constructor({detector}) {
+constructor({ detector }) {
     this.time = new Map();
     this.time.set('something', {
         seconds: 0
@@ -108,14 +108,14 @@ constructor({detector}) {
 The component controller can inject the component element itself as a native DOM element.
 
 ```js
-constructor({elementRef}) {}
+constructor({ elementRef }) {}
 ```
 
 #### Dynamic template loader
 Uses `fetch` to dynamically load a component template.
 
 ```js
-constructor({loadTemplate}) {
+constructor({ loadTemplate }) {
     loadTemplate('path/to/template.html').for(this);
 }
 ```
@@ -123,7 +123,7 @@ constructor({loadTemplate}) {
 This utility abstracts away the assignment of the template to `this.$iq.template`. In the future, the template should be a `Promise`, that way it's much more explicit and there's less magic (which is good for readability):
 
 ```js
-constructor({loadTemplate}) {
+constructor({ loadTemplate }) {
     // THIS IS NOT SUPPORTED YET!
     this.$iq.template = loadTemplate('path/to/template.html');
 }
@@ -312,7 +312,7 @@ Every JavaScript framework needs a [To-Do app](http://todomvc.com/) to show how 
 
 ```js
 class ToDoApp extends Component {
-    constructor({loadTemplate, elementRef}) {
+    constructor({ loadTemplate, elementRef }) {
         super();
         loadTemplate('to_do_app.html').for(this);
 
