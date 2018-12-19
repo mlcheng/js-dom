@@ -130,7 +130,7 @@ constructor({loadTemplate}) {
 ```
 
 ### Event handling
-Events handled by the framework are known as `IQ Events`. You can specify these by the syntax `data-iq:event`, where `event` is any HTML event.
+Events handled by the framework are known as `IQ events`. You can specify these by the syntax `data-iq:event`, where `event` is any HTML event.
 
 ```html
 <p>{{this.time.seconds}} seconds have passed!</p>

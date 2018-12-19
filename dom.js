@@ -122,7 +122,12 @@ iqwerty.dom = (() => {
 			.replace(/^[a-z]/, c => c.toUpperCase());
 	}
 
-	function _getTemplateLoader() {
+	/**
+	 * Injected method to more easily load a template.
+	 * This is going to change.
+	 * @return {Function}
+	 */
+	function _templateLoader() {
 		return url => ({
 			for(classContext) {
 				return fetch(url)
@@ -163,7 +168,7 @@ iqwerty.dom = (() => {
 	 * Return a value with a given context.
 	 * @param {String} js The value to return.
 	 * @param {Object} context
-	 * @return {?} Returns the value in the given context.
+	 * @return {any} Returns the value in the given context.
 	 */
 	function _saferEvalReturn(js, context) {
 		return _saferEval(`return ${js}`, context);
@@ -189,13 +194,14 @@ iqwerty.dom = (() => {
 	 */
 	function _saferInstantiateComponent(maybeClassName, componentElement, detector) {
 		// jshint unused:false
+		// The unused variables are used in eval statements.
 
 		// Do some static checks to make sure the class name is maybe safe.
 		if(!(/[A-Z]/.test(maybeClassName))) {
 			throw new Error(`The class "${maybeClassName}" doesn't seem like a valid class name. Quantum components are recommended to be in PascalCase`);
 		}
 
-		const loader = _getTemplateLoader();
+		const loader = _templateLoader();
 
 		/** @type {Object} Things to inject into the component if needed. */
 		const inject = `{
@@ -212,7 +218,6 @@ iqwerty.dom = (() => {
 			maybeCtrl = eval(`new ${maybeClassName}(${inject})`);
 		} catch(e) {
 			console.warn(`Did you remember to create the class "${maybeClassName}"?`);
-			// TODO: Hey why even try then if you're just going to rethrow it?
 			throw new Error(e);
 		}
 
@@ -230,7 +235,7 @@ iqwerty.dom = (() => {
 	 * @param {Function} action The callback when changes occur.
 	 */
 	function _observe(obj, action = () => {}) {
-		// We store the bindings on the object itself, inside the `$iq` prop. This is probably safe since its key is a symbol, and completely inaccessible from the outside unless someone decided to getAllPropertySymbols.
+		// We store the bindings on the object itself, inside the `$iq` symbol prop. This is probably safe since its key is a symbol, and completely inaccessible from the outside unless someone decided to getAllPropertySymbols.
 		if(!obj[IQ_SYM]) {
 			obj[IQ_SYM] = {};
 		}
@@ -316,9 +321,16 @@ iqwerty.dom = (() => {
 		return text.replace(regex, '${$1}');
 	}
 
+	/**
+	 * Handle data-iq.for on templates. Local scopes are attached to the node using the $iq symbol.
+	 * @param {DocumentFragment} vnode The original node that has the `for` directive.
+	 * @param {Object} context
+	 */
 	function _handleFor(vnode, context) {
 		console.log('for', vnode, context);
 		const expression = vnode.dataset[`${IQ_DIRECTIVE}for`];
+
+		// This is the e.g. `item` of `for(item of items)`.
 		const variable = expression.substring(0, expression.indexOf(' '));
 
 		const vnodes = _saferEval(`
@@ -332,15 +344,16 @@ iqwerty.dom = (() => {
 			return out;
 		`, context);
 
+		// This will hold all the nodes generated from the directive.
 		const fragment = document.createDocumentFragment();
+
 		vnodes.forEach(node => {
 			const n = document.createElement(IQ_CONTAINER);
 			n.innerHTML = node.html;
 			// Definitely has the one child, which is the element that got for'd.
 			const generatedNode = n.children[0];
 
-
-			// This lets the children have the runtime for context as well. Maybe this is stupid. But idk man. It works.
+			// This lets the children of the original node have the local context as well. Maybe this is stupid. But it works.
 			const iterator = [generatedNode];
 			while(iterator.length) {
 				const n = iterator.pop();
@@ -349,26 +362,18 @@ iqwerty.dom = (() => {
 				n[IQ_SYM].get(IQ_SYM_INPUTS).set(variable, node.context);
 				iterator.push(...n.children);
 			}
-			// generatedNode[IQ_SYM] = new Map();
-			// generatedNode[IQ_SYM].set(IQ_SYM_INPUTS, new Map());
-			// generatedNode[IQ_SYM].get(IQ_SYM_INPUTS).set(variable, node.context);
 
-
-
-			// OMG remember this otherwise generated components won't have any events. MAYBE attributes are needed as well?! IDKKKKKK.
-			// _prepareEvents(generatedNode, context);
-
-
-			// Maybe?!?!
-			// Remove the iq.for from the node, otherwise evaluating again will cause infinite loop lol.
+			// Remove the iq.for from the node, otherwise evaluating the template again will cause an infinite loop.
 			generatedNode.removeAttribute(`data-${IQ_DIRECTIVE}for`);
 
-			// Add the local iq.for context temporarily before evaulating the generated code.
+			// Add the local `for` context temporarily before evaulating the generated code.
 			context[variable] = node.context;
+
+			// Evaluate the generated node, just in case children have directives and stuff like that too.
 			_evaluateTemplate(generatedNode, context);
+
+			// Remove the temporary directive context from the main component class.
 			delete context[variable];
-
-
 
 			fragment.appendChild(n.children[0]);
 		});
@@ -379,10 +384,15 @@ iqwerty.dom = (() => {
 			vnode.removeAttribute(name);
 		}
 
-		// Replace the original for'd element with the new ones.
+		// Replace the original element with the newly generated ones.
 		vnode.parentNode.replaceChild(fragment, vnode);
 	}
 
+	/**
+	 * Handle data-iq.if on templates. Local scopes are attached to the node using the $iq symbol.
+	 * @param {DocumentFragment} vnode The original node that has the `if` directive.
+	 * @param {Object} context
+	 */
 	function _handleIf(vnode, context) {
 		console.log('if', vnode);
 		const expression = vnode.dataset[`${IQ_DIRECTIVE}if`];
@@ -398,6 +408,11 @@ iqwerty.dom = (() => {
 		}
 	}
 
+	/**
+	 * Prepare directives. Since inputs have the same syntax, inputs are set here as well.
+	 * @param {DocumentFragment} vnode
+	 * @param {Object} context
+	 */
 	function _prepareDirectives(vnode, context) {
 		Object.keys(vnode.dataset)
 			.filter(key => key.indexOf(IQ_DIRECTIVE) === 0)
@@ -437,6 +452,11 @@ iqwerty.dom = (() => {
 			});
 	}
 
+	/**
+	 * Prepare IQ events that are bound to elements.
+	 * @param {DocumentFragment} vnode
+	 * @param {Object} context
+	 */
 	function _prepareEvents(vnode, context) {
 		console.log('events', vnode);
 		Object.keys(vnode.dataset)
@@ -512,9 +532,10 @@ iqwerty.dom = (() => {
 
 	/**
 	 * The node is defined as changed if it's a different node type, text content has changed (if it's a text node), or it's a completely different tag.
-	 * Some guidance: the node list from the [existing] and [new] might look something:
+	 * Some guidance: the node list from the [existing] and [new] might look something like:
 	 *
 	 * [text, ul, text] vs [text, ul]
+	 *
 	 * @param {Node} prev
 	 * @param {Node} cur
 	 * @return {Boolean} Whether or not the node changed.
@@ -568,7 +589,7 @@ iqwerty.dom = (() => {
 	}
 
 	/**
-	 * TODO: Write a description.
+	 * Main exported function. This can be called as iqwerty.dom.Load(Node) to load components dynamically.
 	 * @param {Node} root The root node to load components on.
 	 * @param {DocumentFragment} stub The stub node to perform all patches on before actually patching to the DOM. DOM operations are expensive, so we're minimizing any manipulation here.
 	 * @param {Boolean} shouldPatch Only the root Load should patch the actual DOM. Loading children and patching onto the stub should not touch the real DOM until all Load operations are complete.
@@ -641,7 +662,7 @@ iqwerty.dom = (() => {
 			if(stub.children.length) {
 				// We only want child elements (since a non-element node is definitely not a component), so we use children instead of childNodes.
 				Array.from(stub.children).forEach(childElement => {
-					// IDK if this makes sense ¯\_(ツ)_/¯
+					// We know that each childElement of the stub is a fragment itself. So `Load`ing the child onto itself as a virtual node will cause anything it evaluates to to be patched onto itself. I think it makes sense.¯\_(ツ)_/¯
 					Load(childElement, childElement, false);
 				});
 			}
