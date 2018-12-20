@@ -95,7 +95,7 @@ constructor({ detector }) {
         seconds: 0
     });
 
-    setTimeout(() => {
+    setInterval(() => {
         this.time.get('something').seconds++;
         detector.ComponentShouldChange();
     }, 1000);
@@ -279,14 +279,14 @@ class ItemComponent extends Component {
 ### Dynamically loading components
 **TODO: Check if this is still right.**
 
-If you're lazy loading things (and you should), this framework exposes only one method, and it's to help render a lazy-loaded component. `iqwerty.vdom.Load()` takes in a reference to an HTML element and instantiates it.
+If you're lazy loading things (and you should), this framework exposes only one method, and it's to help render a lazy-loaded component. `iqwerty.dom.Load()` takes in a reference to an HTML element and instantiates it.
 
 ```js
 iqwerty.vdom.Load(document.getElementById('lazy-loaded-section'));
 ```
 
-## The To-Do app
-Every JavaScript framework needs a [To-Do app](http://todomvc.com/) to show how awesome it is. Here is ours. Read carefully -- this is also the gold-standard on how to create web apps using our framework.
+## The To Do app
+Every JavaScript framework needs a [To Do app](http://todomvc.com/) to show how awesome it is. Here is ours. Read carefully -- this is also the gold-standard on how to create web apps using our framework.
 
 ```html
 <ul>
