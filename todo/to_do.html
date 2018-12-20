@@ -19,5 +19,10 @@
 	</li>
 </ul>
 
-<input type="text" class="todo" placeholder="to do">
-<button data-iq:click="add()">add</button>
+<input
+	type="text"
+	class="todo"
+	placeholder="to do"
+	data-iq:input="setEmpty($iqEvent)">
+<button data-iq:click="add()" data-iq.disabled="isEmpty">add</button>
+<button data-iq:click="clear()" class="remove">remove all</button>

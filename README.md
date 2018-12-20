@@ -111,6 +111,8 @@ The component controller can inject the component element itself as a native DOM
 constructor({ elementRef }) {}
 ```
 
+Note that child views are not available before the component is mounted. See the lifecycle hooks section for more details.
+
 #### Dynamic template loader
 Uses `fetch` to dynamically load a component template.
 
@@ -126,6 +128,38 @@ This utility abstracts away the assignment of the template to `this.$iq.template
 constructor({ loadTemplate }) {
     // THIS IS NOT SUPPORTED YET!
     this.$iq.template = loadTemplate('path/to/template.html');
+}
+```
+
+### Lifecycle hooks
+The component lifecycle is important to understand if you want to do any DOM manipulation with the `elementRef`.
+
+#### `$iqOnMount`
+The component and its child views are now mounted to the DOM and available to modify.
+
+```js
+constructor({ elementRef }) {
+    super();
+
+    this.elementRef = elementRef;
+}
+
+$iqOnMount() {
+    const delete = this.elementRef.querySelector('delete');
+    // Do something with `delete`.
+}
+```
+
+#### `$iqOnChange`
+Called when changes are detected. Unfortunately at this time, we do not know what changed. This should probably be fixed in the future...
+
+```js
+constructor() {
+    super();
+}
+
+$iqOnChange() {
+    console.log('Change detected!');
 }
 ```
 
@@ -244,6 +278,8 @@ for(const item of items) {}
 
 ### Inputs
 Components can receive arbitrary data as inputs. The syntax is the same as directives, meaning you cannot have an input that has the same name as a directive. It just **won't** work.
+
+Under the hood, inputs are set directly onto the element. So, for example using `data-iq.disabled` to an element will set the value on the `HTMLElement` [`disabled` attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select#attr-disabled).
 
 This is fairly similar to Angular, but it's not as good (obviously). Let's re-write the `ItemComponent` using inputs.
 

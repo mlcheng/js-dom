@@ -16,6 +16,14 @@ class ToDoApp extends Component {
 		 * }>}
 		 */
 		this.items = [];
+
+		/** @type {Boolean} Specifies whether or not the main input is empty. */
+		this.isEmpty = true;
+	}
+
+	setEmpty(event) {
+		const host = event.currentTarget;
+		this.isEmpty = host.value === '';
 	}
 
 	add() {
@@ -23,6 +31,11 @@ class ToDoApp extends Component {
 		this.items.push({ label: input.value, edit: false, complete: false });
 		input.value = '';
 		input.focus();
+		this.isEmpty = true;
+	}
+
+	clear() {
+		this.items = [];
 	}
 
 	edit(item, event) {
