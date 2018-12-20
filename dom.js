@@ -657,6 +657,7 @@ iqwerty.dom = (() => {
 			// Patch the actual DOM. This expensive operation should only happen for the root-most component.
 			if(shouldPatch) {
 				_patch(compEl, stub);
+				ctrl.$iqOnMount();
 			}
 		});
 	}
