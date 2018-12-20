@@ -41,6 +41,8 @@ class Component {
 	}
 
 	$iqOnMount() {}
+
+	$iqOnChange() {}
 }
 
 const DOM_PAGE_LOADED = new Promise(resolve => {
@@ -593,10 +595,15 @@ iqwerty.dom = (() => {
 				compEl[IQ_SYM].set(IQ_SYM_INPUTS, new Map());
 			}
 
+			/** @type {Boolean} Determines if this is the initial call, used to call $iqOnMount. */
+			let initialCall = true;
+
 			let ctrl;
 			if(compEl[IQ_SYM].get(IQ_SYM_CTRL)) {
 				// Get the controller that's stored inside the metadata.
 				ctrl = compEl[IQ_SYM].get(IQ_SYM_CTRL);
+
+				initialCall = false;
 			} else {
 				/**
 				 * The change detector to optionally inject into component classes.
@@ -657,7 +664,14 @@ iqwerty.dom = (() => {
 			// Patch the actual DOM. This expensive operation should only happen for the root-most component.
 			if(shouldPatch) {
 				_patch(compEl, stub);
-				ctrl.$iqOnMount();
+
+				// Changes are happening.
+				// TODO: Add changed things as params.
+				ctrl.$iqOnChange();
+
+				if(initialCall) {
+					ctrl.$iqOnMount();
+				}
 			}
 		});
 	}
