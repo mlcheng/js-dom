@@ -282,7 +282,7 @@ class ItemComponent extends Component {
 If you're lazy loading things (and you should), this framework exposes only one method, and it's to help render a lazy-loaded component. `iqwerty.dom.Load()` takes in a reference to an HTML element and instantiates it.
 
 ```js
-iqwerty.vdom.Load(document.getElementById('lazy-loaded-section'));
+iqwerty.dom.Load(document.getElementById('lazy-loaded-section'));
 ```
 
 ## The To Do app
