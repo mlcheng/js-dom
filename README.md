@@ -131,6 +131,21 @@ constructor({ loadTemplate }) {
 }
 ```
 
+#### Global application state
+Provides methods to modify a global spp state.
+
+```js
+constructor({ appState }) {
+	appState.update('isLoggedIn', true);
+}
+```
+
+```js
+constructor({ appState }) {
+	this.isLoggedIn = appState.get('isLoggedIn');
+}
+```
+
 ### Lifecycle hooks
 The component lifecycle is important to understand if you want to do any DOM manipulation with the `elementRef`.
 

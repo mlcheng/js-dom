@@ -121,6 +121,33 @@ iqwerty.dom = (() => {
 		],
 	});
 
+	/** @type {Map} Storage for the application state. */
+	const APP_STATE_STORAGE = new Map();
+
+	/**
+	 * Contains functions to modify global application state.
+	 * @type {Object}
+	 */
+	const APP_STATE = { // jshint ignore:line
+		update(key, value) {
+			APP_STATE_STORAGE.set(key, value);
+
+			// Because this is the entire app's state.
+			iqwerty.dom.Load(document.body);
+		},
+
+		delete(key) {
+			APP_STATE_STORAGE.delete(key);
+
+			// Because this is the entire app's state.
+			iqwerty.dom.Load(document.body);
+		},
+
+		get(key) {
+			return APP_STATE_STORAGE.get(key);
+		}
+	};
+
 	/**
 	 * Turns a snake-case string into PascalCase.
 	 * @param {String} str
@@ -217,6 +244,7 @@ iqwerty.dom = (() => {
 
 		/** @type {Object} Things to inject into the component if needed. */
 		const inject = `{
+			appState: APP_STATE,
 			detector: detector,
 			elementRef: componentElement,
 			loadTemplate: loader,
