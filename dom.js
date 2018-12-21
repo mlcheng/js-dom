@@ -9,11 +9,10 @@
 
 ***********************************************/
 
+/* exported Component */
 'use strict';
 
 var iqwerty = iqwerty || {};
-
-/* exported Component */
 
 /**
  * The base Component class.
@@ -50,6 +49,8 @@ class Component {
 	 */
 	$iqOnChange() {}
 }
+
+window.Component = Component;
 
 const DOM_PAGE_LOADED = new Promise(resolve => {
 	document.addEventListener('DOMContentLoaded', () => {
