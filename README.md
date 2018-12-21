@@ -25,21 +25,21 @@ Somewhere in your page, a `TimerComponent` controller must exist, and it must ex
 
 ```js
 class TimerComponent extends Component {
-    constructor() {
-        super();
+	constructor() {
+		super();
 
-        this.time = {
-            seconds: 0
-        };
+		this.time = {
+			seconds: 0
+		};
 
-        this.start();
-    }
+		this.start();
+	}
 
-    start() {
-        setInterval(() => {
-            this.time.seconds++;
-        }, 1000);
-    }
+	start() {
+		setInterval(() => {
+			this.time.seconds++;
+		}, 1000);
+	}
 }
 ```
 
@@ -47,9 +47,9 @@ Data binding is achieved using brackets in the template, and the template should
 
 ```js
 constructor() {
-    super();
+	super();
 
-    this.$iq.template = '{{time.seconds}} seconds have passed'.
+	this.$iq.template = '{{time.seconds}} seconds have passed'.
 }
 ```
 
@@ -57,9 +57,9 @@ You can use whatever you need get the template.
 
 ```js
 constructor() {
-    super();
+	super();
 
-    this.$iq.template = fs.readFileSync('path/to/template.html', 'utf8');
+	this.$iq.template = fs.readFileSync('path/to/template.html', 'utf8');
 }
 ```
 
@@ -67,11 +67,11 @@ Retrieving templates dynamically should work too.
 
 ```js
 constructor() {
-    super();
+	super();
 
-    iqwerty.template.GetTemplate('path/to/template.html', template => {
-        this.$iq.template = template;
-    });
+	iqwerty.template.GetTemplate('path/to/template.html', template => {
+		this.$iq.template = template;
+	});
 }
 ```
 
@@ -90,15 +90,15 @@ The `detector` reveals a single method: `ComponentShouldChange()`. Use this when
 
 ```js
 constructor({ detector }) {
-    this.time = new Map();
-    this.time.set('something', {
-        seconds: 0
-    });
+	this.time = new Map();
+	this.time.set('something', {
+		seconds: 0
+	});
 
-    setInterval(() => {
-        this.time.get('something').seconds++;
-        detector.ComponentShouldChange();
-    }, 1000);
+	setInterval(() => {
+		this.time.get('something').seconds++;
+		detector.ComponentShouldChange();
+	}, 1000);
 }
 ```
 
@@ -118,7 +118,7 @@ Uses `fetch` to dynamically load a component template.
 
 ```js
 constructor({ loadTemplate }) {
-    loadTemplate('path/to/template.html').for(this);
+	loadTemplate('path/to/template.html').for(this);
 }
 ```
 
@@ -126,8 +126,8 @@ This utility abstracts away the assignment of the template to `this.$iq.template
 
 ```js
 constructor({ loadTemplate }) {
-    // THIS IS NOT SUPPORTED YET!
-    this.$iq.template = loadTemplate('path/to/template.html');
+	// THIS IS NOT SUPPORTED YET!
+	this.$iq.template = loadTemplate('path/to/template.html');
 }
 ```
 
@@ -154,14 +154,14 @@ The component and its child views are now mounted to the DOM and available to mo
 
 ```js
 constructor({ elementRef }) {
-    super();
+	super();
 
-    this.elementRef = elementRef;
+	this.elementRef = elementRef;
 }
 
 $iqOnMount() {
-    const delete = this.elementRef.querySelector('delete');
-    // Do something with `delete`.
+	const delete = this.elementRef.querySelector('delete');
+	// Do something with `delete`.
 }
 ```
 
@@ -170,11 +170,11 @@ Called when changes are detected. Unfortunately at this time, we do not know wha
 
 ```js
 constructor() {
-    super();
+	super();
 }
 
 $iqOnChange() {
-    console.log('Change detected!');
+	console.log('Change detected!');
 }
 ```
 
@@ -188,25 +188,25 @@ Events handled by the framework are known as `IQ events`. You can specify these 
 
 ```js
 class TimerComponent extends Component {
-    constructor() {
-        super();
+	constructor() {
+		super();
 
-        this.time = {
-            seconds: 0
-        };
+		this.time = {
+			seconds: 0
+		};
 
-        this.start();
-    }
+		this.start();
+	}
 
-    start() {
-        setInterval(() => {
-            this.time.seconds++;
-        }, 1000);
-    }
+	start() {
+		setInterval(() => {
+			this.time.seconds++;
+		}, 1000);
+	}
 
-    reset() {
-        this.time.seconds = 0;
-    }
+	reset() {
+		this.time.seconds = 0;
+	}
 }
 ```
 
@@ -218,7 +218,7 @@ If you need to get the actual `Event` that fired, inject the magic variable `$iq
 
 ```js
 selectText(event) {
-    event.currentTarget.select();
+	event.currentTarget.select();
 }
 ```
 
@@ -240,27 +240,27 @@ Optionally render a node based on a given boolean value. If false, the node will
 
 ```html
 <div>
-    <img data-iq.if="this.isLoggedIn" src="/path/to/profile_picture.jpg">
-    <a data-iq.if="!this.isLoggedIn" href="/login">Login</a>
+	<img data-iq.if="this.isLoggedIn" src="/path/to/profile_picture.jpg">
+	<a data-iq.if="!this.isLoggedIn" href="/login">Login</a>
 </div>
 ```
 
 ```js
 class ProfilePictureComponent extends Component {
-    constructor() {
-        super();
+	constructor() {
+		super();
 
-        this.isLoggedIn = false;
-        this.login();
-    }
+		this.isLoggedIn = false;
+		this.login();
+	}
 
-    login() {
-        fetch('/api/login').then(() => {
-            this.isLoggedIn = true;
-        }).catch(() => {
-            this.isLoggedIn = false;
-        });
-    }
+	login() {
+		fetch('/api/login').then(() => {
+			this.isLoggedIn = true;
+		}).catch(() => {
+			this.isLoggedIn = false;
+		});
+	}
 }
 ```
 
@@ -269,17 +269,17 @@ Render a list of elements.
 
 ```html
 <ul>
-    <li data-iq.for="item of items">{{item}}</li>
+	<li data-iq.for="item of items">{{item}}</li>
 </ul>
 ```
 
 ```js
 class ItemComponent extends Component {
-    constructor() {
-        super();
+	constructor() {
+		super();
 
-        this.items = [1, 2, 3];
-    }
+		this.items = [1, 2, 3];
+	}
 }
 ```
 
@@ -300,30 +300,30 @@ This is fairly similar to Angular, but it's not as good (obviously). Let's re-wr
 
 ```js
 class AppComponent extends Component {
-    constructor() {
-        super();
+	constructor() {
+		super();
 
-        this.items = [1, 2, 3];
-        this.$iq.template = `
-            <item-component data-iq.items="items"></item-component>
-        `;
-    }
+		this.items = [1, 2, 3];
+		this.$iq.template = `
+			<item-component data-iq.items="items"></item-component>
+		`;
+	}
 }
 
 class ItemComponent extends Component {
-    constructor() {
-        super();
+	constructor() {
+		super();
 
-        this.$iq.template = `
-            <ul>
-                <li data-iq.for="item of items">{{item}}</li>
-            </ul>
-        `;
+		this.$iq.template = `
+			<ul>
+				<li data-iq.for="item of items">{{item}}</li>
+			</ul>
+		`;
 
-        // You don't have to write this annotation, but it's probably good practice for you to understand what's actually going on. I'm planning on making a wrapper for this that automatically puts the input onto the class context.
-        /** @input */
-        this.items;
-    }
+		// You don't have to write this annotation, but it's probably good practice for you to understand what's actually going on. I'm planning on making a wrapper for this that automatically puts the input onto the class context.
+		/** @input */
+		this.items;
+	}
 }
 ```
 
@@ -337,94 +337,9 @@ iqwerty.dom.Load(document.getElementById('lazy-loaded-section'));
 ```
 
 ## The To Do app
-Every JavaScript framework needs a [To Do app](http://todomvc.com/) to show how awesome it is. Here is ours. Read carefully -- this is also the gold-standard on how to create web apps using our framework.
+Every JavaScript framework needs a [To Do app](http://todomvc.com/) to show how awesome it is.
 
-```html
-<ul>
-    <li
-        data-iq.for="item of items"
-        data-iq:click="edit(item, $iqEvent)"
-        class="{{item.complete ? 'strike' : ''}}">
-            <input
-                type="text"
-                value="{{item.label}}"
-                data-iq.if="item.edit"
-                data-iq:blur="doneEditing(item, $iqEvent)">
-            <span data-iq.if="!item.edit">{{item.label}}</span>
-            <input
-                type="checkbox"
-                data-iq:click="toggleComplete(item, $iqEvent)">
-    </li>
-</ul>
-
-<input type="text" class="todo">
-<button data-iq:click="add()">add</button>
-```
-
-```js
-class ToDoApp extends Component {
-    constructor({ loadTemplate, elementRef }) {
-        super();
-        loadTemplate('to_do_app.html').for(this);
-
-        this.elementRef = elementRef;
-        /**
-         * @type {Array<{
-         *       label: string;
-         *       edit: boolean;
-         *       complete: boolean;
-         * }>}
-         */
-        this.items = [];
-    }
-
-    add() {
-        const input = this.elementRef.querySelector('input.todo');
-        this.items.push({
-            label: input.value,
-            edit: false,
-            complete: false
-        });
-        input.value = '';
-        input.focus();
-    }
-
-    edit(item, event) {
-        item.edit = true;
-        const host = event.currentTarget;
-        host.querySelector('input[type=text]').select();
-    }
-
-    doneEditing(item, event) {
-        const host = event.currentTarget;
-        item.label = host.value;
-        item.edit = false;
-    }
-
-    toggleComplete(item, event) {
-        item.complete = !item.complete;
-        event.stopPropagation();
-    }
-}
-```
-
-And just put it onto your page with:
-
-```html
-<!doctype html>
-<html>
-    <head>
-        <meta charset="utf-8">
-        <title>To-Do</title>
-        <script src="dom.js"></script>
-    </head>
-    <body>
-        <to-do-app></to-do-app>
-    </body>
-</html>
-```
-
-You can see some version of this on my [playground](https://www.michaelcheng.us/playground/lib-js/dom/todo/)
+See ours [here](https://www.michaelcheng.us/playground/lib-js/dom/todo/). Read carefully -- this is also the gold-standard on how to create web apps using our framework.
 
 ## Gotchas
 * The components are `eval`uated with a (slight) attempt at securing the context.
