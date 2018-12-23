@@ -336,6 +336,28 @@ If you're lazy loading things (and you should), this framework exposes only one 
 iqwerty.dom.Load(document.getElementById('lazy-loaded-section'));
 ```
 
+## Style guide
+It's quite funny to have a style guide for such a small framework. But... oh well.
+
+### Framework first
+Always write the `data-iq` attributes before any normal HTML attributes.
+
+```html
+<!-- Do this. -->
+<button
+	data-iq.disabled="isInvalid"
+	class="remove">
+		remove
+</button>
+
+<!-- Not this. -->
+<button
+	class="remove"
+	data-iq.disabled="isInvalid">
+		remove
+</button>
+```
+
 ## The To Do app
 Every JavaScript framework needs a [To Do app](http://todomvc.com/) to show how awesome it is.
 

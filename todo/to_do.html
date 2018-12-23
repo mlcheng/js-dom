@@ -8,21 +8,30 @@
 		data-iq:click="edit(item, $iqEvent)"
 		class="{{item.complete ? 'strike' : ''}}">
 			<input
-				type="checkbox"
-				data-iq:click="toggleComplete(item, $iqEvent)">
+				data-iq:click="toggleComplete(item, $iqEvent)"
+				type="checkbox">
 			<input
-				type="text"
-				value="{{item.label}}"
 				data-iq.if="item.edit"
-				data-iq:blur="doneEditing(item, $iqEvent)">
+				data-iq:blur="doneEditing(item, $iqEvent)"
+				type="text"
+				value="{{item.label}}">
 			<span data-iq.if="!item.edit">{{item.label}}</span>
 	</li>
 </ul>
 
 <input
+	data-iq:input="setEmpty($iqEvent)"
 	type="text"
 	class="todo"
-	placeholder="to do"
-	data-iq:input="setEmpty($iqEvent)">
-<button data-iq:click="add()" data-iq.disabled="isEmpty">add</button>
-<button data-iq:click="clear()" class="remove">remove all</button>
+	placeholder="to do">
+<button
+	data-iq:click="add()"
+	data-iq.disabled="isEmpty">
+		add
+</button>
+<button
+	data-iq:click="clear()"
+	data-iq.disabled="!items.length"
+	class="remove">
+		remove all
+</button>
