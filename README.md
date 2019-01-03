@@ -182,7 +182,7 @@ $iqOnChange() {
 Events handled by the framework are known as `IQ events`. You can specify these by the syntax `data-iq:event`, where `event` is any HTML event.
 
 ```html
-<p>{{this.time.seconds}} seconds have passed!</p>
+<p>{{time.seconds}} seconds have passed!</p>
 <button data-iq:click="reset()">Reset timer</button>
 ```
 
@@ -240,8 +240,8 @@ Optionally render a node based on a given boolean value. If false, the node will
 
 ```html
 <div>
-	<img data-iq.if="this.isLoggedIn" src="/path/to/profile_picture.jpg">
-	<a data-iq.if="!this.isLoggedIn" href="/login">Login</a>
+	<img data-iq.if="isLoggedIn" src="/path/to/profile_picture.jpg">
+	<a data-iq.if="!isLoggedIn" href="/login">Login</a>
 </div>
 ```
 
