@@ -185,7 +185,7 @@ export const dom = (() => {
 			}
 		}
 
-		// 2. Add `!isRoot` to the Component boundary check!
+		// Check isRoot for component boundary check.
 		// This stops the infinite loop by only blocking traversal on children, not the root component.
 		if (!isRoot && currentEl.tagName && COMPONENTS.has(currentEl.tagName.toLowerCase())) {
 			const iq = getIqStore(currentEl);
@@ -213,7 +213,7 @@ export const dom = (() => {
 				if (currChild.nodeType !== futChild.nodeType || (currChild.tagName && currChild.tagName !== futChild.tagName)) {
 					currentEl.replaceChild(futChild, currChild);
 				} else {
-					// Notice we don't pass `true` here, so `isRoot` defaults to false for children!
+					// `isRoot` defaults to false for children.
 					patch(currChild, futChild);
 				}
 			}
@@ -371,13 +371,12 @@ export const dom = (() => {
 		if (!iqStore.mounted) {
 			iqStore.mounted = true;
 			if (typeof instance.$iqOnMount === 'function') {
-				// We use queueMicrotask to ensure the browser has finished
-				// the DOM layout so querySelectors are 100% reliable.
+				// We use queueMicrotask to ensure the browser has finished the DOM layout so querySelectors are 100% reliable.
 				queueMicrotask(() => instance.$iqOnMount());
 			}
 		}
 
-		// CHANGE: Wait until the patch is done before hydrating children
+		// Wait until the patch is done before hydrating children
 		queueMicrotask(() => hydrate());
 	}
 
@@ -411,7 +410,6 @@ export const dom = (() => {
 			if (isPending) return;
 			isPending = true;
 
-			// queueMicrotask tells the browser: "Do this as soon as the current script finishes"
 			queueMicrotask(() => {
 				reflectTemplateToDom(el);
 				isPending = false;
@@ -459,7 +457,6 @@ export const dom = (() => {
 
 		if(iqStore.template) {
 			ping();
-		   // reflectTemplateToDom(el);
 		}
 	}
 
