@@ -1,0 +1,17 @@
+<li class="todo-item {{todo.complete ? 'strike' : ''}}">
+	<label>
+		<input
+			type="checkbox"
+			data-iq.checked="todo.complete"
+			data-iq:change="toggleComplete">
+
+		<span data-iq.if="!todo.edit" data-iq:dblclick="edit">{{todo.label}}</span>
+
+		<input
+			data-iq.if="todo.edit"
+			data-iq:blur="doneEditing"
+			type="text"
+			value="{{todo.label}}">
+	</label>
+	<button class="remove-btn" data-iq:click="deleteItem">Delete</button>
+</li>

@@ -1,57 +1,87 @@
 /* exported ToDoApp */
-/* global Component */
+/* global iqwerty */
 'use strict';
 
-class ToDoApp extends Component {
-	constructor({ loadTemplate, elementRef }) {
+class ToDoApp extends iqwerty.dom.Component {
+	constructor({ $iq }) {
 		super();
-		loadTemplate('to_do.html').for(this);
-
-		this.elementRef = elementRef;
-		/**
-		 * @type {Array<{
-		 *       label: string;
-		 *       edit: boolean;
-		 *       complete: boolean;
-		 * }>}
-		 */
-		this.items = [];
-
-		/** @type {Boolean} Specifies whether or not the main input is empty. */
+		this.$iq = $iq;
+		this.items = [
+			{ label: 'Hello!', complete: true, edit: false },
+		];
 		this.isEmpty = true;
+
+		$iq.loadTemplate('to_do.html');
 	}
 
 	setEmpty(event) {
-		const host = event.currentTarget;
-		this.isEmpty = host.value === '';
+		this.isEmpty = event.target.value.trim() === '';
 	}
 
 	add() {
-		const input = this.elementRef.querySelector('input.todo');
-		this.items.push({ label: input.value, edit: false, complete: false });
-		input.value = '';
-		input.focus();
-		this.isEmpty = true;
+		const input = this.$iq.elementRef.querySelector('input.todo');
+		const val = input.value.trim();
+
+		if (val) {
+			this.items.push({ label: val, complete: false, edit: false });
+			input.value = '';
+			this.isEmpty = true;
+			input.focus();
+		}
 	}
 
 	clear() {
 		this.items = [];
+		this.$iq.ping();
 	}
 
-	edit(item, event) {
-		item.edit = true;
-		const host = event.currentTarget;
-		host.querySelector('input[type=text]').select();
-	}
-
-	doneEditing(item, event) {
-		const host = event.currentTarget;
-		item.label = host.value;
-		item.edit = false;
-	}
-
-	toggleComplete(item, event) {
-		item.complete = !item.complete;
-		event.stopPropagation();
+	handleDelete(event, payload) {
+		const todoToDelete = payload; // Or this.$iq.unwrapEvent(event))
+		this.items = this.items.filter(item => item.label !== todoToDelete.item.label);
+		this.$iq.ping();
 	}
 }
+
+
+class ToDoItem extends iqwerty.dom.Component {
+	constructor({ $iq }) {
+		super();
+		this.$iq = $iq;
+		$iq.input('todo');
+		$iq.loadTemplate('to_do_item.html');
+	}
+
+	toggleComplete() {
+		this.todo.complete = !this.todo.complete;
+		this.$iq.ping();
+	}
+
+	edit() {
+		this.todo.edit = true;
+		this.$iq.ping();
+
+		const host = this.$iq.elementRef;
+		setTimeout(() => {
+			const textInput = host.querySelector('input[type="text"]');
+			if (textInput) textInput.select();
+		}, 0);
+	}
+
+	doneEditing(event) {
+		const val = event.target.value.trim();
+		if (val) {
+			this.todo.label = val;
+		}
+		this.todo.edit = false;
+		this.$iq.ping();
+	}
+
+	deleteItem() {
+		this.$iq.dispatch('itemDeleted', this.todo);
+	}
+}
+
+iqwerty.dom.register({
+	'to-do-app': ToDoApp,
+	'to-do-item': ToDoItem,
+});

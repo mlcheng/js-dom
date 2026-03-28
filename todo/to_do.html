@@ -3,34 +3,25 @@
 </div>
 
 <ul data-iq.if="items.length">
-	<li
+	<to-do-item
 		data-iq.for="item of items"
-		data-iq:click="edit(item, $iqEvent)"
-		class="{{item.complete ? 'strike' : ''}}">
-			<input
-				data-iq:click="toggleComplete(item, $iqEvent)"
-				type="checkbox">
-			<input
-				data-iq.if="item.edit"
-				data-iq:blur="doneEditing(item, $iqEvent)"
-				type="text"
-				value="{{item.label}}">
-			<span data-iq.if="!item.edit">{{item.label}}</span>
-	</li>
+		data-iq.todo="item"
+		data-iq:itemDeleted="handleDelete">
+	</to-do-item>
 </ul>
 
 <input
-	data-iq:input="setEmpty($iqEvent)"
+	data-iq:input="setEmpty"
 	type="text"
 	class="todo"
 	placeholder="to do">
 <button
-	data-iq:click="add()"
+	data-iq:click="add"
 	data-iq.disabled="isEmpty">
 		add
 </button>
 <button
-	data-iq:click="clear()"
+	data-iq:click="clear"
 	data-iq.disabled="!items.length"
 	class="remove">
 		remove all

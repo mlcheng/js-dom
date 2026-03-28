@@ -10,23 +10,25 @@ Cool points:
 * Lots of bugs
 * No IE support :(
 
-A demo is available on my [playground](https://www.michaelcheng.us/playground/lib-js/dom/).
+A demo is available on my [playground](https://playground.michaelcheng.us/lib-js/dom/).
 
 ## Usage
-This framework uses "components" to get its work done. There is some magic in creating a component.
+This framework uses "components" to get its work done.
 
-First, the component tag **must** be in `snake-case`. Any tag without dashes will be ignored, since they may be native HTML elements.
+First, the component tag **must** be in `kebab-case`. Any tag without dashes will be ignored, since they may be native HTML elements.
 
 ```html
-<timer-component></timer-component>
+<timer-app></timer-app>
 ```
 
-Somewhere in your page, a `TimerComponent` controller must exist, and it must extend `Component`. Remember to call `super()`. The mapping from `<timer-component>` to `TimerComponent` is magic (well... it's just `snake-case` to `PascalCase`), and you don't have to explicitly bind this.
+Somewhere in your page, a `TimerApp` controller must exist, and it must extend `iqwerty.dom.Component`. Remember to call `super()`. You must register the tag / component mapping:
 
 ```js
-class TimerComponent extends Component {
-	constructor() {
+class TimerApp extends Component {
+	constructor({ $iq }) {
 		super();
+		// Save the injector reference so methods can use it later. More on this below.
+		this.$iq = $iq;
 
 		this.time = {
 			seconds: 0
@@ -41,7 +43,80 @@ class TimerComponent extends Component {
 		}, 1000);
 	}
 }
+
+iqwerty.dom.register({
+	'timer-app': TimerApp
+});
 ```
+
+### The `$iq` injection
+
+The `$iq` utility is injected into your component's controller. It includes the following features:
+
+#### `template(string)`
+
+Set the template for your component and trigger a render cycle.
+
+```js
+this.$iq.template('<div>Hello {{name}}</div>');
+```
+
+#### `loadTemplate(url)`
+
+Dynamically fetch a URL and sets it as the component template.
+
+```js
+this.$iq.loadTemplate('template.html');
+```
+
+#### `ping()`
+
+Trigger a render cycle. For deep mutations (nested objects), this should be called manually to trigger re-render.
+
+```js
+this.nested.object = false;
+this.$iq.ping();
+```
+
+*In case you're curious, this framework works by observing enumerable properties of an object. Sometimes, weird things like nested `Map`s don't get observed well. Changes to those nested values may not propagate correctly to the framework.*
+
+#### `elementRef`
+
+Gets a reference to the component's root node.
+
+```js
+this.$iq.elementRef.select();
+```
+
+#### `input(prop)`
+
+Define the property string as an input to the component. This allows parents to pass data to its child components.
+
+```js
+this.$iq.input('items');
+```
+
+```html
+<child-component data-iq.items="items"></child-component>
+```
+
+#### `dispatch(event, payload, referenceElement)`
+
+Fire a custom event up the tree to pass data to parents from children. The event is emitted from the component root element. The referenceElement is the element that emits the event. If not specified, the event will be emitted by the component root node.
+
+```js
+this.$iq.dispatch('deleteItem', itemData);
+```
+
+#### `unwrapEvent(event)`
+
+Unwraps the custom event by returning the payload.
+
+```js
+this.$iq.unwrapEvent(event);
+```
+
+### Data binding
 
 Data binding is achieved using brackets in the template, and the template should be provided in the `$iq` property of `Component`.
 
@@ -49,7 +124,7 @@ Data binding is achieved using brackets in the template, and the template should
 constructor() {
 	super();
 
-	this.$iq.template = '{{time.seconds}} seconds have passed'.
+	this.$iq.template('{{time.seconds}} seconds have passed');
 }
 ```
 
@@ -70,79 +145,135 @@ constructor() {
 	super();
 
 	iqwerty.template.GetTemplate('path/to/template.html', template => {
-		this.$iq.template = template;
+		this.$iq.template(template);
 	});
 }
 ```
 
-The framework provides an easy way to load templates dynamically. This is described below in the utility injection section below.
+The framework also provides an easy way to load templates dynamically.
 
 For simplicity and ease of understanding, in the rest of the document we will assume that the template is already set without manually declaring it in the JavaScript.
 
 ## Advanced usage
 The framework also includes many other powerful features that you probably didn't know about!
 
-### Utility injection
-The component controller has a few dependencies that can be injected by the framework.
+### Event handling
 
-#### Detector
-The `detector` reveals a single method: `ComponentShouldChange()`. Use this when the view should be updated based on state changes, but it failed to work automagically.
+Events handled by the framework are known as `IQ events`. You can specify these by the syntax `data-iq:event`, where `event` is any HTML event.
+
+```html
+<element data-iq:event="handler"></element>
+```
+
+The handler receives the custom event and the component context. The event can be unwrapped to reveal the custom event payload using `unwrapEvent()`, which is just `event.detail` under the hood.
+
+### Directives
+
+There are structural directives to manipulate the DOM.
+
+#### `.if`
+
+Optionally render a node.
+
+```html
+<element data-iq.if="enabled">Enabled</element>
+<element data-iq.if="!enabled">Disabled</element>
+```
+
+#### `.for`
+
+Render a list of items.
+
+```html
+<element data-iq.for="item of items">
+	<span>{{item}}</span>
+</element>
+```
+
+The expression is "safely" evaluated using a prepended `const`, so the expression `item of items` is actually evaluated as:
 
 ```js
-constructor({ detector }) {
-	this.time = new Map();
-	this.time.set('something', {
-		seconds: 0
-	});
+for(const item of items) {}
+```
 
-	setInterval(() => {
-		this.time.get('something').seconds++;
-		detector.ComponentShouldChange();
-	}, 1000);
+ಠ_ಠ
+
+### Property bindings
+
+State can be bound directly to DOM attributes, such as boolean properties on elements.
+
+```html
+<input type="checkbox" data-iq.checked="isComplete">
+<button data-iq.disabled="isDisabled">Search</button>
+```
+
+### Component inputs
+
+Structured data can be passed from parent to children through inputs.
+
+```html
+<user-profile data-iq.user="currentUser"></user-profile>
+```
+
+```js
+class UserProfile extends iqwerty.dom.Component {
+	constructor({ $iq }) {
+		$iq.input('user');
+	}
 }
 ```
 
-*In case you're curious, this framework works by observing enumerable properties of an object. Sometimes, weird things like nested `Map`s don't get observed well. Changes to those nested values may not propagate correctly to the framework.*
+`user` is then accessible on the `UserProfile` component.
 
-#### Component element
-The component controller can inject the component element itself as a native DOM element.
+## Concepts
 
-```js
-constructor({ elementRef }) {}
-```
+### Component communication
 
-Note that child views are not available before the component is mounted. See the lifecycle hooks section for more details.
-
-#### Dynamic template loader
-Uses `fetch` to dynamically load a component template.
+Parents pass data to children through `input`s, and children pass data up via custom events.
 
 ```js
-constructor({ loadTemplate }) {
-	loadTemplate('path/to/template.html').for(this);
+class ChildItem extends iqwerty.dom.Component {
+	constructor({ $iq }) {
+		super();
+		this.$iq = $iq;
+		this.$iq.input('task'); // Accepts `this.task` from parent
+
+		this.$iq.template(`
+			<li>
+				{{task.name}}
+				<button data-iq:click="remove">X</button>
+			</li>
+		`);
+	}
+
+	remove() {
+		// Dispatches a 'delete' event up the tree.
+		this.$iq.dispatch('delete', this.task);
+	}
 }
-```
 
-This utility abstracts away the assignment of the template to `this.$iq.template`. In the future, the template should be a `Promise`, that way it's much more explicit and there's less magic (which is good for readability):
+class ParentList extends iqwerty.dom.Component {
+	constructor({ $iq }) {
+		super();
+		this.$iq = $iq;
+		this.tasks = [{ name: 'Eat' }, { name: 'Sleep' }];
 
-```js
-constructor({ loadTemplate }) {
-	// THIS IS NOT SUPPORTED YET!
-	this.$iq.template = loadTemplate('path/to/template.html');
-}
-```
+		this.$iq.template(`
+			<ul>
+				<child-item
+					data-iq.for="item of tasks"
+					data-iq.task="item"
+					data-iq:delete="handleDelete">
+				</child-item>
+			</ul>
+		`);
+	}
 
-#### Global application state
-Provides methods to modify a global spp state.
-
-```js
-constructor({ appState }) {
-	appState.update('isLoggedIn', true);
-}
-```
-
-```js
-constructor({ appState }) {
-	this.isLoggedIn = appState.get('isLoggedIn');
+	handleDelete(event, elementRef, payload) {
+		const deletedTask = this.$iq.unwrapEvent(event); // or payload
+		this.tasks = this.tasks.filter(t => t !== deletedTask);
+		this.$iq.ping();
+	}
 }
 ```
 
@@ -178,164 +309,6 @@ $iqOnChange() {
 }
 ```
 
-### Event handling
-Events handled by the framework are known as `IQ events`. You can specify these by the syntax `data-iq:event`, where `event` is any HTML event.
-
-```html
-<p>{{time.seconds}} seconds have passed!</p>
-<button data-iq:click="reset()">Reset timer</button>
-```
-
-```js
-class TimerComponent extends Component {
-	constructor() {
-		super();
-
-		this.time = {
-			seconds: 0
-		};
-
-		this.start();
-	}
-
-	start() {
-		setInterval(() => {
-			this.time.seconds++;
-		}, 1000);
-	}
-
-	reset() {
-		this.time.seconds = 0;
-	}
-}
-```
-
-If you need to get the actual `Event` that fired, inject the magic variable `$iqEvent` in your template.
-
-```html
-<input type="text" data-iq:click="selectText($iqEvent)">
-```
-
-```js
-selectText(event) {
-	event.currentTarget.select();
-}
-```
-
-This could just be simplified to:
-
-```js
-<input type="text" data-iq:click="$iqEvent.currentTarget.select()">
-```
-
-...if you know what's going on behind the scenes.
-
-### Directives
-This framework supports some directives (similar to Angular) that make it easier to manipulate your DOM.
-
-#### `.if`
-Optionally render a node based on a given boolean value. If false, the node will not appear in the DOM.
-
-*Actually, for performance reasons and ease of diffing, the node will __not__ be in the DOM, but it will be replaced by an HTML comment. See the source for details.*
-
-```html
-<div>
-	<img data-iq.if="isLoggedIn" src="/path/to/profile_picture.jpg">
-	<a data-iq.if="!isLoggedIn" href="/login">Login</a>
-</div>
-```
-
-```js
-class ProfilePictureComponent extends Component {
-	constructor() {
-		super();
-
-		this.isLoggedIn = false;
-		this.login();
-	}
-
-	login() {
-		fetch('/api/login').then(() => {
-			this.isLoggedIn = true;
-		}).catch(() => {
-			this.isLoggedIn = false;
-		});
-	}
-}
-```
-
-#### `.for`
-Render a list of elements.
-
-```html
-<ul>
-	<li data-iq.for="item of items">{{item}}</li>
-</ul>
-```
-
-```js
-class ItemComponent extends Component {
-	constructor() {
-		super();
-
-		this.items = [1, 2, 3];
-	}
-}
-```
-
-The expression is "safely" evaluated using a prepended `const`, so the expression `item of items` is actually evaluated as:
-
-```js
-for(const item of items) {}
-```
-
-ಠ_ಠ
-
-### Inputs
-Components can receive arbitrary data as inputs. The syntax is the same as directives, meaning you cannot have an input that has the same name as a directive. It just **won't** work.
-
-Under the hood, inputs are set directly onto the element. So, for example using `data-iq.disabled` to an element will set the value on the `HTMLElement` [`disabled` attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/select#attr-disabled).
-
-This is fairly similar to Angular, but it's not as good (obviously). Let's re-write the `ItemComponent` using inputs.
-
-```js
-class AppComponent extends Component {
-	constructor() {
-		super();
-
-		this.items = [1, 2, 3];
-		this.$iq.template = `
-			<item-component data-iq.items="items"></item-component>
-		`;
-	}
-}
-
-class ItemComponent extends Component {
-	constructor() {
-		super();
-
-		this.$iq.template = `
-			<ul>
-				<li data-iq.for="item of items">{{item}}</li>
-			</ul>
-		`;
-
-		// You don't have to write this annotation, but it's probably good practice for you to understand what's actually going on. I'm planning on making a wrapper for this that automatically puts the input onto the class context.
-		/** @input */
-		this.items;
-	}
-}
-```
-
-### Dynamically loading components
-**TODO: Check if this is still right.**
-
-If you're lazy loading things (and you should), this framework exposes only one method, and it's to help render a lazy-loaded component. `iqwerty.dom.Load()` takes in a reference to an HTML element and instantiates it.
-
-```js
-iqwerty.dom.Load(document.getElementById('lazy-loaded-section'));
-```
-
 ## Style guide
 It's quite funny to have a style guide for such a small framework. But... oh well.
 
@@ -361,7 +334,7 @@ Always write the `data-iq` attributes before any normal HTML attributes.
 ## The To Do app
 Every JavaScript framework needs a [To Do app](http://todomvc.com/) to show how awesome it is.
 
-See ours [here](https://www.michaelcheng.us/playground/lib-js/dom/todo/). Read carefully -- this is also the gold-standard on how to create web apps using our framework.
+See ours [here](https://playground.michaelcheng.us/lib-js/dom/todo/). Read carefully -- this is also the gold-standard on how to create web apps using our framework.
 
 ## Gotchas
 * The components are `eval`uated with a (slight) attempt at securing the context.

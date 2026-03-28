@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+	<script src="dom.min.js"></script>
+	<script>
+		/* global iqwerty */
+		'use strict';
+
+		class TestComponent extends iqwerty.dom.Component {
+			constructor({ $iq }) {
+				super();
+
+				this.$iq = $iq;
+				this.name = 'michael';
+				this.show = true;
+				this.items = [1, 2, 3];
+
+				$iq.template(`
+					<div>hello {{name}}</div>
+					<p>the name is {{name}}.</p>
+					<ul data-iq:delete="removeItem">
+						<li
+							data-iq.for="item of items"
+							data-iq:click="dispatchDelete"
+							data-item="{{item}}"
+							class="{{item}}">{{item}}</li>
+					</ul>
+					<c-c data-iq.for="item of items" data-iq.theitem="item" data-iq:child="handle"></c-c>
+					`);
+
+				// setTimeout(() => {
+				// 	this.show = false;
+				// 	this.items = [1, 3, 4];
+				// 	this.name = 'michael lee';
+				// 	$iq.ping();
+				// }, 2000);
+
+				// setTimeout(() => {
+				// 	this.items = [1, 5];
+				// 	$iq.ping();
+				// }, 3000);
+			}
+
+			handle(event, elementRef, payload) {
+				const unwrapped = this.$iq.unwrapEvent(event);
+				console.log(event, unwrapped, elementRef, payload);
+			}
+
+			removeItem(event) {
+				const remove = this.$iq.unwrapEvent(event);
+				this.items.splice(this.items.indexOf(remove), 1);
+				// console.log(this.items);
+				// this.items = [1];
+				this.$iq.ping();
+			}
+
+			dispatchDelete(event) {
+				console.log(event);
+				this.$iq.dispatch('delete', { item: event.target.dataset.item }, event.target);
+			}
+
+			handleChild(event) {
+				console.warn(event);
+			}
+		}
+
+		class ChildComponent extends iqwerty.dom.Component {
+			constructor({ $iq }) {
+				super();
+
+				this.$iq = $iq;
+				this.childComponentProp = 'cool';
+
+
+				$iq.template('<p data-iq:click="doThis">hi {{theitem}} {{childComponentProp}}</p>');
+				$iq.input('theitem');
+			}
+
+			doThis(event) {
+				this.$iq.dispatch('child', {coolio: event});
+			}
+		}
+
+		iqwerty.dom.register({
+			'test-component': TestComponent,
+			'c-c': ChildComponent,
+		});
+	</script>
+</head>
+<body>
+	<test-component></test-component>
+</body>
+</html>
